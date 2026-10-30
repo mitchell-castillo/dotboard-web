@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import{bindTransport,apiFetch}from'./lib/api-client.ts';
+globalThis.window=new EventTarget();
+test('unbound session fails without network',async()=>{bindTransport(null);await assert.rejects(apiFetch('/api/workspace'),/Inicia sesión/);});
+test('session disposal aborts pending request and rejects stale response',async()=>{let signal,release;const pending=new Promise(r=>release=r);bindTransport({request:async(_path,options)=>{signal=options.signal;await pending;return new Response('{}');}});const result=apiFetch('/api/workspace');await new Promise(r=>setTimeout(r,0));bindTransport(null);assert.equal(signal.aborted,true);release();await assert.rejects(result,/Session changed/);});
+test('401 requests auth gate reset',async()=>{let fired=false;window.addEventListener('dotboard-auth-required',()=>fired=true,{once:true});bindTransport({request:async()=>new Response('{}',{status:401})});await assert.rejects(apiFetch('/api/workspace'));assert.equal(fired,true);bindTransport(null);});
+test('restore routes through bearer transport with preserved JSON and signal',async()=>{let seen;bindTransport({request:async(path,options)=>{seen={path,options};return new Response('{}');}});await apiFetch('/api/workspace/restore',{method:'POST',body:JSON.stringify({revision:4,requestId:'test',backup:{boards:[]}})});assert.equal(seen.path,'/workspace/restore');assert.equal(seen.options.body.revision,4);bindTransport(null);});

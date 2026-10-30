@@ -1,3 +1,17 @@
+# Current release: Azure SPA integration, access not configured
+
+As of 2026-10-30, the Pages entry point is the exact built output of `frontend-auth/`. The former root `src/` and tests remain preserved as historical cookie/BFF preparation, not the active authentication implementation. Build the current candidate with `cd frontend-auth && npm ci && npm test && npm run lint && npm run build`, then copy its `dist` files to `docs`. Existing historical assets and security documentation are retained; the current index references only the new build.
+
+The new UI integrates official Microsoft MSAL Authorization Code + PKCE, server-verified bearer access tokens, exact-envelope idempotent recovery, authenticated backup/instructions/restore, and a fail-closed login gate. `docs/dotboard-config.json` deliberately contains provider `unconfigured` and empty settings. No real identity provider, API endpoint, Cosmos connection, private workspace, or credentials are published. This is **not a completed usable Azure deployment**. See [current integration and limitations](frontend-auth/README.md).
+
+This explicitly differs from the historical HttpOnly-cookie/BFF proposal below. Official MSAL redirect uses sessionStorage; memoryStorage is unsupported for that redirect flow. Tokens are managed by MSAL, not manually persisted as a shortcut. The XSS/token-cache tradeoff and real provider/API authorization must be independently reviewed before enabling live access. No cookie/CSRF guarantees are claimed for the new bearer design. Historical source is retained for traceability.
+
+Local verification: 36 tests, TypeScript/Vite production build and lint pass; dependency audit reports zero known vulnerabilities at preparation time. These do not certify live login, browser accessibility, Azure/Cosmos deployment or data migration.
+
+---
+
+## Historical preparation (superseded active client contract)
+
 # DotBoard public web
 
 Frontend-only React/Vite extraction of the existing DotBoard interface. **This is a prepared frontend, not a complete deployed application.** The authenticated backend and identity provider are not wired yet. With API configuration empty, the public page explicitly says access is not configured; it does not collect passwords, fetch boards, or show demo data as real data.

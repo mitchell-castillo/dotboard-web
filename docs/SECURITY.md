@@ -1,3 +1,13 @@
+# Current Azure SPA release clarification — 2026-10-30
+
+The current served client is built from `frontend-auth/`; the release below retains historical BFF/cookie guidance for traceability. Current authentication is official MSAL Authorization Code + PKCE with bearer access tokens and sessionStorage token cache, not HttpOnly cookies. Memory-only cache is unsupported by the official redirect flow. This entails XSS risk and must be reviewed alongside CSP, dependency safety, issuer/audience/scope validation, exact CORS and server workspace membership before activation. No client header grants identity. No manually persisted bearer shortcut is used.
+
+Configuration remains `provider: unconfigured` with all endpoint/identity fields empty. No real login, API/Cosmos integration or migration is claimed. Preserve the private Site as the source of truth until authorized, independently verified cutover. Current code is public-safe; never publish real workspace backups, seeds, backend code or secrets.
+
+---
+
+## Historical cookie/BFF release gates
+
 # Release gates
 
 1. Review every public file and final bundle for secret/data leaks; never publish private repository history or a workspace backup.

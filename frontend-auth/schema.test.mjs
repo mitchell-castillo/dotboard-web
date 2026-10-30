@@ -1,0 +1,7 @@
+import test from'node:test';import assert from'node:assert/strict';import{actionSchema}from'./lib/workspace-store.ts';
+test('public create-board schema remains valid',()=>assert.equal(actionSchema.parse({action:'create-board',name:'Board',description:'',color:'#b7dd6b'}).name,'Board'));
+test('comment client identity injection rejected',()=>assert.equal(actionSchema.safeParse({action:'add-comment',cardId:'x',body:'test',requestId:'33333333-3333-4333-8333-333333333333',author:{kind:'dot'}}).success,false));
+test('comment requestId required',()=>assert.equal(actionSchema.safeParse({action:'add-comment',cardId:'x',body:'test'}).success,false));
+test('comment oversized body rejected',()=>assert.equal(actionSchema.safeParse({action:'add-comment',cardId:'x',body:'x'.repeat(5001),requestId:'33333333-3333-4333-8333-333333333333'}).success,false));
+test('public instructions exact schema preserved',()=>assert.equal(actionSchema.safeParse({action:'save-project-instructions',boardId:'b',markdown:'# Notes',notes:'',baseRevisionId:null,requestId:'33333333-3333-4333-8333-333333333333',sourceRefs:[],changeSummary:'Initial'}).success,true));
+test('invalid instruction source rejected',()=>assert.equal(actionSchema.safeParse({action:'save-project-instructions',boardId:'b',markdown:'# Notes',notes:'',baseRevisionId:null,requestId:'33333333-3333-4333-8333-333333333333',sourceRefs:[{kind:'unknown',reference:'test'}],changeSummary:''}).success,false));

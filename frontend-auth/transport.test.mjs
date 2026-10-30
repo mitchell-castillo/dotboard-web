@@ -1,0 +1,20 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {validateConfig,DotBoardTransport} from './transport.mjs';
+const base={provider:'entra',clientId:'11111111-1111-4111-8111-111111111111',tenantId:'22222222-2222-4222-8222-222222222222',apiBaseUrl:'https://api.example.test/api',redirectUri:'https://web.example.test/callback',apiScope:'api://dotboard/DotBoard.Access'};
+const account={homeAccountId:'test-account'};
+function fixture(){let calls=[];let active=account;const msal={initialize:async()=>calls.push('initialize'),handleRedirectPromise:async()=>{calls.push('redirect');return null;},getActiveAccount:()=>active,setActiveAccount:a=>active=a,loginRedirect:async()=>{},logoutRedirect:async()=>{},acquireTokenSilent:async()=>({accessToken:'synthetic-token',account})};const fetch=async(url,options)=>{calls.push({url,options});return{status:409};};return{calls,msal,transport:new DotBoardTransport(validateConfig(base,'https://web.example.test'),msal,fetch),setAccount:a=>active=a};}
+test('missing config fails closed',()=>assert.throws(()=>validateConfig(null,'https://web.example.test')));
+test('unverified provider rejected',()=>assert.throws(()=>validateConfig({...base,provider:'unknown'},'https://web.example.test')));
+test('common tenant rejected',()=>assert.throws(()=>validateConfig({...base,tenantId:'common'},'https://web.example.test')));
+test('HTTP API rejected',()=>assert.throws(()=>validateConfig({...base,apiBaseUrl:'http://api.example.test'},'https://web.example.test')));
+test('redirect origin mismatch rejected',()=>assert.throws(()=>validateConfig(base,'https://other.example.test')));
+test('implicit default permission rejected',()=>assert.throws(()=>validateConfig({...base,apiScope:'api://dotboard/.default'},'https://web.example.test')));
+test('initialize awaits redirect handling',async()=>{const f=fixture();await f.transport.initialize();assert.deepEqual(f.calls,['initialize','redirect']);});
+test('no account means no network',async()=>{const f=fixture();f.setAccount(null);await assert.rejects(f.transport.request('/workspace'));assert.equal(f.calls.length,0);});
+test('absolute URL rejected without token',async()=>{const f=fixture();await assert.rejects(f.transport.request('https://evil.example/workspace'));assert.equal(f.calls.length,0);});
+test('token account mismatch rejected',async()=>{const f=fixture();f.msal.acquireTokenSilent=async()=>({accessToken:'x',account:{homeAccountId:'different'}});await assert.rejects(f.transport.request('/workspace'));assert.equal(f.calls.length,0);});
+test('bearer only to configured API, cookies omitted and redirects rejected',async()=>{const f=fixture();await f.transport.request('/workspace');assert.equal(f.calls[0].url,'https://api.example.test/api/workspace');assert.equal(f.calls[0].options.headers.Authorization,'Bearer synthetic-token');assert.equal(f.calls[0].options.credentials,'omit');assert.equal(f.calls[0].options.redirect,'error');});
+test('mutation preserves revision/requestId and exposes409 without retries',async()=>{const f=fixture();const id='33333333-3333-4333-8333-333333333333';const operation={type:'synthetic'};const result=await f.transport.mutate(operation,123,id);assert.equal(result.status,409);assert.equal(f.calls.length,1);assert.deepEqual(JSON.parse(f.calls[0].options.body),{revision:123,requestId:id,operation});});
+test('repeated login blocked',async()=>{const f=fixture();await f.transport.login();await assert.rejects(f.transport.login());});
+test('failed login permits deliberate retry',async()=>{const f=fixture();let count=0;f.msal.loginRedirect=async()=>{count++;throw Error('cancelled');};await assert.rejects(f.transport.login());await assert.rejects(f.transport.login());assert.equal(count,2);});
+test('silent token failure does not redirect',async()=>{const f=fixture();f.msal.acquireTokenSilent=async()=>{throw Error('interaction_required');};f.msal.loginRedirect=async()=>{throw Error('must not be called');};await assert.rejects(f.transport.request('/workspace'),/interaction_required/);assert.equal(f.calls.length,0);});
