@@ -8,7 +8,7 @@ export async function apiFetch(path:string,init:RequestInit={}) {
   if(init.signal?.aborted)controller.abort();
   const response=await transport.request(path.replace(/^\/api/,''),{method:init.method??'GET',body:typeof init.body==='string'?JSON.parse(init.body):undefined,signal:controller.signal});
   if(version!==generation)throw new DOMException('Session changed','AbortError');
-  if(response.status===401){window.dispatchEvent(new Event('dotboard-auth-required'));throw new Error('La sesión debe renovarse.');}
+  if(response.status===401||response.status===403){window.dispatchEvent(new Event('dotboard-auth-required'));throw new Error(response.status===403?'No tienes acceso a este espacio.':'La sesión debe renovarse.');}
   return response as Response;
  }catch(error){if(error instanceof Error&&/interaction_required|login_required|no_tokens_found/i.test(error.message))window.dispatchEvent(new Event('dotboard-auth-required'));throw error;}
  finally{active.delete(controller);init.signal?.removeEventListener('abort',abort);}

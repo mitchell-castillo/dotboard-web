@@ -7,8 +7,14 @@ export function validateConfig(config, pageOrigin) {
   if (api.protocol !== 'https:' || api.username || api.password || api.search || api.hash
       || redirect.protocol !== 'https:' || redirect.origin !== pageOrigin || redirect.username || redirect.password || redirect.search || redirect.hash)
     throw new Error('Approved HTTPS API and same-origin redirect are required.');
-  if (typeof config.apiScope !== 'string' || !config.apiScope.startsWith('api://') || /\s/.test(config.apiScope)
-      || config.apiScope.endsWith('/.default')) throw new Error('Explicit delegated DotBoard API scope is required.');
+  // Exact verified API identifier only; the actual delegated scope remains deployment input.
+  const verifiedHttpsScopePrefix = 'https://remindmeapp.onmicrosoft.com/8f4aea5c-0f25-465e-91ea-e035233859c6/';
+  const scope = config.apiScope;
+  const allowedHttpsScope = typeof scope === 'string'
+    && scope.startsWith(verifiedHttpsScopePrefix)
+    && /^[A-Za-z][A-Za-z0-9_.-]*$/.test(scope.slice(verifiedHttpsScopePrefix.length));
+  if (typeof scope !== 'string' || (!scope.startsWith('api://') && !allowedHttpsScope)
+      || /\s/.test(scope) || scope.endsWith('/.default')) throw new Error('Explicit delegated DotBoard API scope is required.');
   return Object.freeze({ ...config, apiBaseUrl: api.href.replace(/\/$/, ''), redirectUri: redirect.href });
 }
 
