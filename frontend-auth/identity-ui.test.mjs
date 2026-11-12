@@ -1,16 +1,20 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
 let moduleId=0;
-async function setup(){
- const elements=Object.fromEntries(['login','clear','result','status'].map(k=>[k,{disabled:false,textContent:'',listeners:{},addEventListener(n,f){this.listeners[n]=f;}}]));
- const events={};let resolve,reject,calls=0,clears=0;
+async function setup(deferSession=false){
+ const elements=Object.fromEntries(['login','session','clear','result','status'].map(k=>[k,{disabled:false,textContent:'',listeners:{},addEventListener(n,f){this.listeners[n]=f;}}]));
+ const events={};let resolve,reject,calls=0,clears=0,sessionCalls=0,resolveSession,sessionSignal;
  class Client{async initialize(){} acquireTokenPopup(){calls++;return new Promise((yes,no)=>{resolve=yes;reject=no;});}async clearCache(){clears++;}}
- globalThis.__identityHarness={Client};globalThis.document={querySelector:s=>elements[s.slice(1)]};globalThis.location={origin:'synthetic'};
+ globalThis.__identityHarness={Client,probe:async(_token,_selected,{signal})=>{sessionCalls++;sessionSignal=signal;if(deferSession)await new Promise(resolve=>{resolveSession=resolve;});return {authenticated:true,actorKind:'user'};}};globalThis.document={querySelector:s=>elements[s.slice(1)]};globalThis.location={origin:'synthetic'};
  globalThis.window={addEventListener:(n,f)=>{events[n]=f;}};window.self=window;window.top=window;
  let source=fs.readFileSync(new URL('./identity.mjs',import.meta.url),'utf8').replace(/import[^;]+;/g,'');
- source='const PublicClientApplication=globalThis.__identityHarness.Client;const BrowserCacheLocation={MemoryStorage:"memoryStorage"};const policy={};const assertOrigin=()=>{};const verifyAccessToken=async()=>({sub:"synthetic-verified-sub"});'+source;
+ source='const PublicClientApplication=globalThis.__identityHarness.Client;const BrowserCacheLocation={MemoryStorage:"memoryStorage"};const policy={};const assertOrigin=()=>{};const verifyAccessToken=async()=>({sub:"synthetic-verified-sub"});const verifyHumanSession=globalThis.__identityHarness.probe;'+source;
  await import('data:text/javascript,'+encodeURIComponent(source+`\n//${moduleId++}`));await Promise.resolve();
- return {elements,events,resolve:()=>resolve({accessToken:'synthetic-only'}),reject:()=>reject(Error('synthetic failure')),calls:()=>calls,clears:()=>clears};
+ return {elements,events,resolve:()=>resolve({accessToken:'synthetic-only'}),reject:()=>reject(Error('synthetic failure')),calls:()=>calls,clears:()=>clears,sessionCalls:()=>sessionCalls,resolveSession:()=>resolveSession(),sessionSignal:()=>sessionSignal};
 }
 test('UI double click blocked, verified claims only, hide clears',async()=>{const h=await setup();const first=h.elements.login.listeners.click();await h.elements.login.listeners.click();assert.equal(h.calls(),1);h.resolve();await first;assert.equal(h.elements.result.textContent,'{\n  "sub": "synthetic-verified-sub"\n}');h.elements.clear.listeners.click();assert.equal(h.elements.result.textContent,'');assert.ok(h.clears()>=2);});
 test('UI cancelled popup permits retry',async()=>{const h=await setup();const first=h.elements.login.listeners.click();h.reject();await first;assert.equal(h.elements.result.textContent,'');assert.equal(h.elements.login.disabled,false);const second=h.elements.login.listeners.click();assert.equal(h.calls(),2);h.resolve();await second;});
 test('UI navigation discards pending result',async()=>{const h=await setup();const first=h.elements.login.listeners.click();h.events.pagehide();h.resolve();await first;assert.equal(h.elements.result.textContent,'');});
+
+test('identity button never requests API; explicit session button uses verified flow and suppresses double clicks',async()=>{const h=await setup();const first=h.elements.login.listeners.click();h.resolve();await first;assert.equal(h.sessionCalls(),0);const second=h.elements.session.listeners.click();await h.elements.login.listeners.click();assert.equal(h.calls(),2);h.resolve();await second;assert.equal(h.sessionCalls(),1);assert.equal(JSON.parse(h.elements.result.textContent).actorKind,'user');});
+test('navigation during login prevents API request and clears cache',async()=>{const h=await setup();const pending=h.elements.session.listeners.click();h.events.popstate();h.resolve();await pending;assert.equal(h.sessionCalls(),0);assert.equal(h.elements.result.textContent,'');assert.ok(h.clears()>=2);});
+test('navigation during API request aborts and hides late result',async()=>{const h=await setup(true);const pending=h.elements.session.listeners.click();h.resolve();await Promise.resolve();await Promise.resolve();assert.equal(h.sessionCalls(),1);h.events.pagehide();assert.equal(h.sessionSignal().aborted,true);h.resolveSession();await pending;assert.equal(h.elements.result.textContent,'');});

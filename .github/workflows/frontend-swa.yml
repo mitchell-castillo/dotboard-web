@@ -25,7 +25,7 @@ jobs:
       - run: npm --prefix frontend-auth run lint
       - name: Lint identity-only source
         working-directory: frontend-auth
-        run: npx eslint identity.mjs identity-verification.mjs bridge.mjs
+        run: npx eslint identity.mjs identity-verification.mjs identity-session.mjs bridge.mjs
       - run: npm --prefix frontend-auth exec -- tsc --noEmit -p frontend-auth/tsconfig.json
       - name: Build only identity and Microsoft bridge
         working-directory: frontend-auth
