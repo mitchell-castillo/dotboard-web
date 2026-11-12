@@ -8,7 +8,7 @@ const headers={
  'Referrer-Policy':'no-referrer',
  'X-Content-Type-Options':'nosniff',
  'X-Frame-Options':'DENY',
- 'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://login.microsoftonline.com; img-src 'self' data:; frame-src https://login.microsoftonline.com; base-uri 'none'; form-action https://login.microsoftonline.com; frame-ancestors 'none'; object-src 'none'"
+ 'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://login.microsoftonline.com https://dotboardfunctions-atfgg7bxeeh3eqdp.eastus-01.azurewebsites.net/api/session; img-src 'self' data:; frame-src https://login.microsoftonline.com; base-uri 'none'; form-action https://login.microsoftonline.com; frame-ancestors 'none'; object-src 'none'"
 };
 export const hosting={globalHeaders:headers,routes:[{route:'/api/*',statusCode:404}]};
 export function audit(entries){

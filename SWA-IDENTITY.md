@@ -1,6 +1,6 @@
 # Isolated SWA identity setup (manual)
 
-This is a parallel, identity-only release. Existing docs/ (GitHub Pages), the normal index.html/main.tsx application and the private Site are untouched. Only frontend-auth/dist is published. No API calls or workspace component are included in this build. No data is initialized.
+This is a parallel, identity/session-diagnostic release. Existing docs/ (GitHub Pages), the normal index.html/main.tsx application and the private Site are untouched. Only frontend-auth/dist is published. Only an explicit read-only GET /api/session diagnostic is included; no workspace component is included. No data is initialized.
 
 - Hosting: dotboard-web-prod, Azure Static Web Apps Free.
 - Exact origin: https://red-mushroom-06ff8430f.5.azurestaticapps.net
@@ -26,3 +26,11 @@ The publication job checks the action output URL against the exact approved orig
 References: Microsoft MSAL browser docs caching.md, initialization.md and redirect-bridge.md in AzureAD/microsoft-authentication-library-for-js; installed 5.27.0 package exports @azure/msal-browser/redirect-bridge. Standard supported popup APIs are used, not manual OAuth or a forged Origin.
 
 Dependency review: runtime audit reports zero vulnerabilities. Full development-tool audit reports seven moderate findings from minimatch 10.2.6 through the existing typescript-eslint 8.72.1 chain (GHSA-g3hv-75wg-m249). These tools are not shipped in dist. No forced breaking dependency downgrade was applied.
+
+## Explicit human session diagnostic (12 November)
+
+The second button acquires and cryptographically verifies a fresh delegated access token using the same pinned MSAL/JOSE flow. It sends the bearer only to the fixed DotBoard backend `/api/session`, with omitted credentials, rejected redirects, no-store/no-referrer and a 45-second timeout. CSP connect-src adds only this exact backend path. The expected response is bounded to8KiB and must have exactly authenticated:true, actorKind:user, the configured workspace UUID and assistantIdentityConfigured:true. Only those four allowlisted fields are rendered; no raw response or exception is displayed.
+
+No owner's oid/sub is embedded in the public bundle. The backend's exact membership is the authorization boundary; local token validation alone is never proof of session authorization. The existing identity-only button does not call the API. Both flows clear MSAL cache and discard token references on completion; navigation invalidates pending results and aborts the probe. No token storage added and no authentication permissions changed.
+
+No /api/workspace, BoardApp, import, Cosmos read/write test or retention activation is included. Session success proves authenticated membership only. Live session/login/cancel/retry/navigation QA remains required after publication; synthetic tests are not real authentication evidence.
