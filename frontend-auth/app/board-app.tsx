@@ -1,3 +1,4 @@
+import {readOnlyMessage} from '../read-only-policy.mjs';
 import {PendingWrite} from "@/lib/pending-write";
 import {apiFetch} from "@/lib/api-client";
 
@@ -25,7 +26,7 @@ const blankDraft:Draft={name:"",description:"",color:BOARD_COLORS[0],title:"",la
 type Confirmation={title:string;description:string;operation:Action};
 type Tool={name:string;title:string;description:string;inputSchema:object;annotations:{readOnlyHint:boolean;untrustedContentHint:boolean};execute:(input:unknown)=>unknown|Promise<unknown>};
 
-export default function BoardApp(){
+export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
   const [workspace,setWorkspace]=useState<Workspace>({boards:[],revision:0});
   const [selected,setSelected]=useState("");
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
@@ -123,11 +124,12 @@ export default function BoardApp(){
     finally{lock.current=false;setBusy(false);}
   },[updateState]);
   const mutate=useCallback(async(operation:Action)=>{
+    if(readOnly)throw new Error(readOnlyMessage);
     if(lock.current)throw new Error("Wait for the previous change to finish.");
     const requestId="requestId" in operation?operation.requestId:crypto.randomUUID();
     const body=uncertainMutation.current.begin({revision:stateRef.current.revision,requestId,operation});
     return sendMutation(body);
-  },[sendMutation]);
+  },[sendMutation,readOnly]);
   async function recoverMutation(){try{await sendMutation(uncertainMutation.current.replay());}catch{/* existing error remains visible */}}
 
   useEffect(()=>{
@@ -250,19 +252,19 @@ export default function BoardApp(){
       <a href="./" className="brand"><Columns3 size={25}/>DotBoard</a>
       <div className="space-label">PRIVATE WORKSPACE</div>
       <div className="workspace-name"><span className="workspace-avatar">d</span><div>dot’s projects<small>Synced privately</small></div></div>
-      <div className="side-section"><span>My boards</span><button className="icon-button" onClick={()=>openBoard()} disabled={loading||busy} aria-label="Create board"><Plus size={18}/></button></div>
+      <div className="side-section"><span>My boards</span><button className="icon-button" onClick={()=>openBoard()} disabled={readOnly||loading||busy} aria-label="Create board"><Plus size={18}/></button></div>
       <nav className="sidebar-scroll" aria-label="Boards">
         {workspace.boards.map(b=><button key={b.id} className={"board-nav"+(board?.id===b.id?" active":"")+(dropTarget===b.id?" drag-target":"")} onClick={()=>setSelected(b.id)} aria-current={board?.id===b.id?"page":undefined}
           onDragOver={e=>{if(canDrag(e)){e.preventDefault();e.dataTransfer.dropEffect="move";setDropTarget(b.id);setCardTarget(null);}}} onDragLeave={()=>setDropTarget("")} onDrop={e=>void drop(e,b.id,b.columns[0].id)} title={"Open "+b.name+" · Drop a card here to move it"}>
           <span className="board-color" style={{background:b.color}}/><span>{b.name}</span><span className="nav-count">{b.columns.reduce((s,c)=>s+c.cards.length,0)}</span>
         </button>)}
-        <button className="new-board-nav" onClick={()=>openBoard()} disabled={loading||busy}><Plus size={17}/>Create board</button>
+        <button className="new-board-nav" onClick={()=>openBoard()} disabled={readOnly||loading||busy}><Plus size={17}/>Create board</button>
       </nav>
       <div className="sidebar-bottom"><LockKeyhole size={15}/><span>Private · Only you</span></div>
     </aside>
     <main className="main">
       <header className="topbar"><span><button type="button" className="icon-button sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed?"Show sidebar":"Hide sidebar"} title={sidebarCollapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebarCollapsed} aria-controls="workspace-sidebar">{sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><LayoutGrid size={17}/> My boards <span className="breadcrumb-slash">/</span><strong>{board?.name??"My workspace"}</strong></span>
-        <div className="topbar-actions"><BackupDownload compact disabled={loading||busy}/><LocalBackups workspace={workspace} disabled={loading||busy||!!editor||!!confirmation||!!instructionsBoardId} onChange={updateState}/><span className="save-status" role="status">{loading||busy?<><Loader2 size={15} className="animate-spin"/><span className="save-status-label">{loading?"Loading…":"Saving…"}</span></>:error?<><AlertCircle size={15}/><span className="save-status-label">Check the notice</span></>:<><Check size={15}/><span className="save-status-label">Saved</span></>}</span><CardArchive workspace={workspace} busy={busy} loading={loading} mutate={mutate} onRestore={setSelected}/><button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={darkMode?"Switch to light mode":"Switch to dark mode"} title={darkMode?"Switch to light mode":"Switch to dark mode"}>{darkMode?<Sun size={17}/>:<Moon size={17}/>}</button></div>
+        <div className="topbar-actions"><BackupDownload compact disabled={loading||busy}/><LocalBackups workspace={workspace} disabled={readOnly||loading||busy||!!editor||!!confirmation||!!instructionsBoardId} onChange={updateState}/><span className="save-status" role="status">{loading||busy?<><Loader2 size={15} className="animate-spin"/><span className="save-status-label">{loading?"Loading…":"Saving…"}</span></>:error?<><AlertCircle size={15}/><span className="save-status-label">Check the notice</span></>:<><Check size={15}/><span className="save-status-label">{readOnly?"Solo lectura":"Saved"}</span></>}</span><CardArchive workspace={workspace} busy={busy} loading={loading} mutate={mutate} onRestore={setSelected}/><button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={darkMode?"Switch to light mode":"Switch to dark mode"} title={darkMode?"Switch to light mode":"Switch to dark mode"}>{darkMode?<Sun size={17}/>:<Moon size={17}/>}</button></div>
       </header>
       {(loading||busy)&&<div className="loading-bar"/>}
       <div className="board-heading"><div className="board-summary"><div className="board-title-row"><span className="board-color" style={{background:board?.color??BOARD_COLORS[0]}}/><h1>{board?.name??"My boards"}</h1>{board&&<span className="board-card-count">{total} {total===1?"card":"cards"}</span>}</div>{board?.description&&<p title={board.description}>{board.description}</p>}</div>
@@ -275,16 +277,16 @@ export default function BoardApp(){
           {board.columns.map(c=><section key={c.id} className={"column"+(dropTarget===c.id?" drag-target":"")+(draggingColumn===c.id?" column-dragging":"")+(columnTarget?.id===c.id?" column-drop-"+columnTarget.side:"")} aria-label={c.name}
             onDragEnter={e=>previewDrop(e,c.id)} onDragOver={e=>previewDrop(e,c.id)}
             onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node)){setDropTarget("");setCardTarget(t=>t?.columnId===c.id?null:t);setColumnTarget(t=>t?.id===c.id?null:t);}}} onDrop={e=>void dropOnColumn(e,c.id)}>
-            <header className="column-heading" draggable={!busy}
+            <header className="column-heading" draggable={!readOnly&&!busy}
               onDragStart={e=>{clearCardDrag();columnDrag.current={boardId:board.id,columnId:c.id};setDraggingColumn(c.id);e.dataTransfer.setData("application/x-dot-board-column",c.id);e.dataTransfer.effectAllowed="move";}}
               onDragEnd={clearColumnDrag}>
-              <button className="icon-button column-drag-handle" disabled={busy} aria-label={"Move column "+c.name} title="Drag to reorder, or click to choose a position. Use Left and Right keys to move."
+              <button className="icon-button column-drag-handle" disabled={readOnly||busy} aria-label={"Move column "+c.name} title="Drag to reorder, or click to choose a position. Use Left and Right keys to move."
                 onClick={()=>openColumn(c.id)} onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();e.stopPropagation();void moveColumnByKey(c.id,e.key==="ArrowLeft"?-1:1);}}}><GripVertical size={16}/></button>
               <span className={"status-mark status-"+(c.name==="In progress"?1:c.name==="Done"?2:0)}/><h2>{c.name}</h2><span className="column-count">{c.cards.length}</span><ColumnTriggers boardId={board.id} column={c} busy={busy} mutate={mutate}/><button className="icon-button" onClick={()=>openColumn(c.id)} disabled={busy} aria-label={"Edit column "+c.name}><Pencil size={14}/></button></header>
-            <div className="cards">{c.cards.map(card=><article key={card.id} data-card-id={card.id} className={"task-card"+(draggingCard===card.id?" card-dragging":"")+(cardTarget?.columnId===c.id&&cardTarget.cardId===card.id?" card-drop-"+cardTarget.side:"")} draggable={!busy}
+            <div className="cards">{c.cards.map(card=><article key={card.id} data-card-id={card.id} className={"task-card"+(draggingCard===card.id?" card-dragging":"")+(cardTarget?.columnId===c.id&&cardTarget.cardId===card.id?" card-drop-"+cardTarget.side:"")} draggable={!readOnly&&!busy}
               onDragStart={e=>{e.stopPropagation();clearColumnDrag();setCardTarget(null);dragId.current=card.id;setDraggingCard(card.id);e.dataTransfer.setData("text/plain",card.id);e.dataTransfer.effectAllowed="move";}}
               onDragEnd={clearCardDrag}>
-              <div className="card-topline">{card.label&&LABELS[card.label]&&<span className="card-label" style={{background:`var(--label-${card.label}-background, ${LABELS[card.label].background})`,color:`var(--label-${card.label}-color, ${LABELS[card.label].color})`}}>{LABELS[card.label].name}</span>}<button type="button" className="icon-button quick-archive" disabled={busy} aria-label={"Archivar "+card.title} title="Archivar tarjeta" draggable={false} onPointerDown={e=>e.stopPropagation()} onDragStart={e=>{e.preventDefault();e.stopPropagation();}} onClick={e=>{e.stopPropagation();void quickArchive(card,c.id);}}><Archive size={16}/></button></div>
+              <div className="card-topline">{card.label&&LABELS[card.label]&&<span className="card-label" style={{background:`var(--label-${card.label}-background, ${LABELS[card.label].background})`,color:`var(--label-${card.label}-color, ${LABELS[card.label].color})`}}>{LABELS[card.label].name}</span>}<button type="button" className="icon-button quick-archive" disabled={readOnly||busy} aria-label={"Archivar "+card.title} title="Archivar tarjeta" draggable={false} onPointerDown={e=>e.stopPropagation()} onDragStart={e=>{e.preventDefault();e.stopPropagation();}} onClick={e=>{e.stopPropagation();void quickArchive(card,c.id);}}><Archive size={16}/></button></div>
               <button type="button" className="card-open" aria-label={"Open card "+card.title} disabled={busy} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" onClick={()=>openCard(c.id,card)} onKeyDown={e=>{if(e.altKey&&(e.key==="ArrowUp"||e.key==="ArrowDown")){e.preventDefault();void moveCardByKey(c.id,card.id,e.key==="ArrowUp"?-1:1);}}}>
               {(card.comments?.length??0)>0&&<span className="card-comment-count">{card.comments!.length} {card.comments!.length===1?"comentario":"comentarios"}</span>}
               <span className="card-title">{card.title}</span>{card.description&&<span className="card-preview">{descriptionPlainText(card.description)}</span>}
@@ -300,11 +302,11 @@ export default function BoardApp(){
     </main>
     <Dialog open={!!editor} onOpenChange={open=>{if(!open&&!busy&&!lock.current)setEditor(null);}}>
       <DialogContent className={"modal editor-modal"+(editor?.kind==="card"?" card-detail-modal":"")+(descriptionExpanded&&editor?.kind==="card"?" description-maximized":"")} showCloseButton={false} onOpenAutoFocus={e=>{e.preventDefault();requestAnimationFrame(()=>{if(editor?.kind==="card"&&descriptionExpanded)document.querySelector<HTMLElement>(".description-maximized .description-reader, .description-maximized .rich-editor")?.focus({preventScroll:true});else editorInitialInput.current?.focus();});}} onCloseAutoFocus={e=>{e.preventDefault();if(editorReturnFocus.current?.isConnected)editorReturnFocus.current.focus();else document.querySelector<HTMLButtonElement>(`[data-add-column="${CSS.escape(draft.columnId)}"]`)?.focus();}} onEscapeKeyDown={e=>{if(descriptionExpanded){e.preventDefault();setDescriptionExpanded(false);}}}>
-        <div className={"editor-heading"+(editor?.kind==="card"&&draft.title.length>80?" long-ticket-heading":"")}><DialogTitle className="modal-title">{editor?.kind==="card"&&editor.cardId?(draft.title||"Ticket sin título"):editorTitle}</DialogTitle><div className="editor-heading-actions">{isEditing&&editor?.kind==="card"&&<button type="button" className="button primary archive-card-action" disabled={busy||draft.description.length>5000} onClick={()=>void archiveCard()}><Archive size={17}/>Archive</button>}<DialogClose asChild><button className="icon-button" aria-label="Close" disabled={busy}><X size={20}/></button></DialogClose></div></div>
+        <div className={"editor-heading"+(editor?.kind==="card"&&draft.title.length>80?" long-ticket-heading":"")}><DialogTitle className="modal-title">{editor?.kind==="card"&&editor.cardId?(draft.title||"Ticket sin título"):editorTitle}</DialogTitle><div className="editor-heading-actions">{isEditing&&editor?.kind==="card"&&<button type="button" className="button primary archive-card-action" disabled={readOnly||busy||draft.description.length>5000} onClick={()=>void archiveCard()}><Archive size={17}/>Archive</button>}<DialogClose asChild><button className="icon-button" aria-label="Close" disabled={busy}><X size={20}/></button></DialogClose></div></div>
         <div className="editor-scroll" tabIndex={0} role="region" aria-label={editor?.kind==="card"?"Contenido del ticket":"Configuración del proyecto"}>
         <DialogDescription className="modal-desc">{editor?.kind==="board"?"Each board starts with three columns you can customize.":editor?.kind==="column"?"Give this stage of your board a name.":"Add the details and choose where to save your card."}</DialogDescription>
         {commentCard&&<CardCreatedAt createdAt={commentCard.createdAt}/>}
-        <form id="workspace-editor" onSubmit={submit} aria-busy={busy}><fieldset disabled={busy} className="editor-fields">
+        <form id="workspace-editor" onSubmit={submit} aria-busy={busy}><fieldset disabled={readOnly||busy} className="editor-fields">
           {editor?.kind!=="card"?<label className="field">Name<input ref={editorInitialInput} autoFocus required maxLength={120} placeholder={editor?.kind==="board"?"For example, Personal project":"For example, In review"} value={draft.name} onChange={e=>patchDraft({name:e.target.value})}/></label>:<label className="field">Title<input ref={editorInitialInput} autoFocus required maxLength={200} placeholder="What would you like to do?" value={draft.title} onChange={e=>patchDraft({title:e.target.value})}/></label>}
           {editor?.kind==="column"&&editor.columnId&&<label className="field">Position on board<select value={draft.position} onChange={e=>patchDraft({position:Number(e.target.value)})}>{workspace.boards.find(b=>b.id===editor.boardId)?.columns.map((c,i)=><option key={c.id} value={i}>{i+1} · {c.name}</option>)}</select></label>}
           {editor?.kind==='board'&&<label className="field">Description <span style={{fontWeight:400,color:'#8a949e'}}>(optional)</span><textarea maxLength={5000} placeholder="What will you use this board for?" value={draft.description} onChange={e=>patchDraft({description:e.target.value})}/></label>}
@@ -317,7 +319,7 @@ export default function BoardApp(){
           </>}
           {formError&&<div className="inline-error" role="alert">{formError}</div>}
         </fieldset></form>
-        {commentCard&&<CardComments key={commentCard.id} card={commentCard} busy={busy} mutate={mutate} fullHeight/>}
+        {commentCard&&<CardComments key={commentCard.id} card={commentCard} busy={readOnly||busy} mutate={mutate} fullHeight/>}
         </div>
           <div className="form-actions editor-footer">
             {isEditing&&<div className="editor-card-actions"><button type="button" className={"button "+(editor?.kind==="card"?"delete-card-action":"danger")} disabled={busy} onClick={()=>{
@@ -325,7 +327,7 @@ export default function BoardApp(){
               else if(editor?.kind==="board"&&editor.boardId)setConfirmation({title:"Delete board?",description:"This board, its columns, and all its cards will be deleted.",operation:{action:"delete-board",boardId:editor.boardId}});
               else if(editor?.kind==="column"&&editor.columnId)setConfirmation({title:"Delete column?",description:"The column must be empty. The board needs at least one column.",operation:{action:"delete-column",boardId:editor.boardId,columnId:editor.columnId}});
             }}><Trash2 size={16}/><span>Delete</span></button></div>}
-            <button className="button secondary" type="button" onClick={()=>{if(!lock.current)setEditor(null);}} disabled={busy}>Cancel</button><button className="button primary" type="submit" form="workspace-editor" disabled={busy||draft.description.length>5000}>{busy?<><Loader2 size={16} className="animate-spin"/>Saving…</>:isEditing?"Save changes":editor?.kind==="board"?"Create board":editor?.kind==="column"?"Add column":"Create card"}</button>
+            <button className="button secondary" type="button" onClick={()=>{if(!lock.current)setEditor(null);}} disabled={busy}>Cancel</button><button className="button primary" type="submit" form="workspace-editor" disabled={readOnly||busy||draft.description.length>5000}>{busy?<><Loader2 size={16} className="animate-spin"/>Saving…</>:isEditing?"Save changes":editor?.kind==="board"?"Create board":editor?.kind==="column"?"Add column":"Create card"}</button>
           </div>
 
       </DialogContent>
@@ -333,7 +335,7 @@ export default function BoardApp(){
     <Dialog open={!!confirmation} onOpenChange={open=>{if(!open&&!busy)setConfirmation(null);}}>
       <DialogContent className="modal" role="alertdialog" showCloseButton={false} onOpenAutoFocus={e=>{e.preventDefault();deleteCancelRef.current?.focus();}}><DialogTitle className="modal-title">{confirmation?.title}</DialogTitle><DialogDescription className="modal-desc">{confirmation?.description}</DialogDescription>
         {formError&&<div className="inline-error" role="alert">{formError}</div>}
-        <div className="form-actions"><button ref={deleteCancelRef} type="button" className="button secondary" onClick={()=>setConfirmation(null)} disabled={busy}>Cancel</button><button type="button" className="button danger" style={{marginRight:0}} onClick={()=>void confirmDelete()} disabled={busy}>{busy?"Deleting…":confirmation?.operation.action==="delete-card"?"Delete permanently":"Yes, delete"}</button></div>
+        <div className="form-actions"><button ref={deleteCancelRef} type="button" className="button secondary" onClick={()=>setConfirmation(null)} disabled={busy}>Cancel</button><button type="button" className="button danger" style={{marginRight:0}} onClick={()=>void confirmDelete()} disabled={readOnly||busy}>{busy?"Deleting…":confirmation?.operation.action==="delete-card"?"Delete permanently":"Yes, delete"}</button></div>
       </DialogContent>
     </Dialog>
     {instructionsBoard&&<ProjectInstructions key={instructionsBoard.id} board={instructionsBoard} busy={busy} onClose={()=>{setInstructionsBoardId(null);setInstructionsBoardSnapshot(null);}} returnFocus={instructionsReturnFocus.current} refreshWorkspace={refreshInstructionsWorkspace} save={async operation=>{await mutate(operation);return stateRef.current.boards.find(b=>b.id===operation.boardId)?.instructions??null;}}/>}

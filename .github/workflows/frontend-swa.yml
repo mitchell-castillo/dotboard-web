@@ -40,7 +40,8 @@ jobs:
           retention-days: 1
   publish:
     needs: validate
-    if: github.repository == 'mitchell-castillo/dotboard-web' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    # Retired: full UI workflow preserves identity and bridge without replacing app.html.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
