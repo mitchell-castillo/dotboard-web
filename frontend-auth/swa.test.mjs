@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+import {audit,hosting,config} from '../scripts/SwaArtifact.mjs';
+import {policy} from './identity-verification.mjs';
+const entries={'index.html':'<script src="/assets/bridge.js"></script>','identity.html':'<script src="/assets/identity.js"></script>','dotboard-config.json':JSON.stringify(config),'staticwebapp.config.json':JSON.stringify(hosting),'assets/bridge.js':'void 0','assets/identity.js':'void 0'};
+test('isolated release metadata agrees with verifier',()=>{assert.equal(config.redirectUri,policy.origin+'/');assert.equal(config.clientId,policy.client);assert.equal(config.tenantId,policy.tenant);assert.equal(config.apiScope,policy.scope);audit(entries);});
+for(const name of ['backend.dll','.git/config','initial-workspace.json','assets/source.map','test.html'])test(`artifact rejects ${name}`,()=>assert.throws(()=>audit({...entries,[name]:'x'})));
+test('artifact rejects unreviewed CSP',()=>assert.throws(()=>audit({...entries,'staticwebapp.config.json':'{}'})));
+test('artifact rejects shared origin',()=>assert.throws(()=>audit({...entries,'dotboard-config.json':JSON.stringify({...config,redirectUri:'https://mitchell-castillo.github.io/dotboard-web/'})})));
+test('identity source cannot load board or send API requests',()=>{const s=fs.readFileSync(new URL('./identity.mjs',import.meta.url),'utf8');assert.doesNotMatch(s,/fetch\(|BoardApp|transport|api-client|localStorage|sessionStorage|console\./);assert.match(s,/MemoryStorage/);});
+test('workflow manual, main only, dist only, no PR preview permissions',()=>{const s=fs.readFileSync(new URL('../.github/workflows/frontend-swa.yml',import.meta.url),'utf8');assert.match(s,/workflow_dispatch:/);assert.doesNotMatch(s,/pull_request:|push:|id-token:|pages:|repo_token:|write/);assert.match(s,/app_location: frontend-auth\/dist/);assert.match(s,/skip_api_build: true/);assert.match(s,/dotboard-swa-production/);});
+test('artifact scans identity HTML for secrets and workspace payloads',()=>{for(const payload of ['<!-- ghp_'+'x'.repeat(30)+' -->','<script type="application/json">{"boards":[{"synthetic":true}]}</script>'])assert.throws(()=>audit({...entries,'identity.html':entries['identity.html']+payload}));});
+test('reserved audit filename cannot mask a secret',()=>assert.throws(()=>audit({...entries,'assets/identity-entry-audit.js':'ghp_'+'x'.repeat(30)})));

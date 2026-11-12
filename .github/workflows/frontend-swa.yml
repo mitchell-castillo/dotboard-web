@@ -1,0 +1,56 @@
+name: Publish isolated identity diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dotboard-swa-production
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'mitchell-castillo/dotboard-web' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: dotboard-swa-production
+      url: https://red-mushroom-06ff8430f.5.azurestaticapps.net/identity.html
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-auth/package-lock.json
+      - name: Verify current main before building
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api repos/mitchell-castillo/dotboard-web/git/ref/heads/main --jq .object.sha)" = "$GITHUB_SHA"
+      - run: npm --prefix frontend-auth ci --ignore-scripts --no-fund
+      - run: npm --prefix frontend-auth audit --omit=dev --audit-level=moderate
+      - run: npm --prefix frontend-auth test
+      - run: npm --prefix frontend-auth run lint
+      - name: Lint identity-only source
+        working-directory: frontend-auth
+        run: npx eslint identity.mjs identity-verification.mjs bridge.mjs
+      - run: npm --prefix frontend-auth exec -- tsc --noEmit -p frontend-auth/tsconfig.json
+      - name: Build only identity and Microsoft bridge
+        working-directory: frontend-auth
+        run: npx vite build --config vite.swa.config.ts
+      - run: node scripts/SwaArtifact.mjs prepare
+      - name: Recheck current main immediately before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api repos/mitchell-castillo/dotboard-web/git/ref/heads/main --jq .object.sha)" = "$GITHUB_SHA"
+      - name: Publish only audited dist, never source or API
+        uses: Azure/static-web-apps-deploy@4d27395796ac319302594769cfe812bd207490b1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DOTBOARD }}
+          action: upload
+          app_location: frontend-auth/dist
+          output_location: ''
+          api_location: ''
+          skip_app_build: true
+          skip_api_build: true
+          production_branch: main

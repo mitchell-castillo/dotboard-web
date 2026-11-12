@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {generateKeyPair,SignJWT} from 'jose';
+import {verifyAccessToken,policy,assertOrigin} from './identity-verification.mjs';
+const pair=await generateKeyPair('RS256');const other=await generateKeyPair('RS256');
+const base={ver:'1.0',tid:policy.tenant,oid:'11111111-2222-4333-8444-555555555555',appid:policy.client,scp:'DotBoard.Access',sub:'synthetic-test-sub',iss:policy.issuer,aud:policy.audience,iat:Math.floor(Date.now()/1000),nbf:Math.floor(Date.now()/1000)-5,exp:Math.floor(Date.now()/1000)+300};
+const token=(overrides={},key=pair.privateKey)=>new SignJWT({...base,...overrides}).setProtectedHeader({alg:'RS256'}).sign(key);
+test('only verified selected access claims leave verifier',async()=>{const selected=await verifyAccessToken(await token({email:'not-returned',name:'not-returned'}),pair.publicKey);assert.equal(selected.sub,base.sub);assert.deepEqual(Object.keys(selected),['sub','tid','oid','iss','aud','appid','scp','exp']);});
+for(const [name,overrides]of Object.entries({issuer:{iss:'https://evil.invalid'},audience:{aud:policy.client},tenant:{tid:'wrong'},human:{oid:'wrong'},client:{appid:'wrong'},appOnly:{idtyp:'app'},scope:{scp:'Other'},expired:{exp:1},future:{nbf:base.exp+600},missingExp:{exp:undefined},missingSubject:{sub:undefined},idToken:{scp:undefined},version:{ver:'2.0'}}))test(`reject ${name}`,async()=>assert.rejects(()=>token(overrides).then(t=>verifyAccessToken(t,pair.publicKey))));
+test('reject wrong signature',async()=>assert.rejects(()=>token({},other.privateKey).then(t=>verifyAccessToken(t,pair.publicKey))));
+test('origin is exact, never shared Pages or lookalike',()=>{assertOrigin(policy.origin);for(const o of ['https://mitchell-castillo.github.io',policy.origin+'.evil.invalid','http://localhost:5173'])assert.throws(()=>assertOrigin(o));});
