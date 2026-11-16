@@ -1,4 +1,4 @@
-import {readOnlyRejection} from './read-only-policy.mjs';
+import {currentOnlyRejection} from './current-only-policy.mjs';
 import {DotBoardTransport} from './transport.mjs';
 import {verifyAccessToken} from './identity-verification.mjs';
 import {verifyHumanSession} from './identity-session.mjs';
@@ -23,7 +23,7 @@ export class PopupSessionTransport extends DotBoardTransport {
  }
  async logout(){if(this.interacting)throw Error('Authentication already in progress');this.interacting=true;const account=this.msal.getActiveAccount();try{await this.invalidate();await this.msal.logoutPopup({account,postLogoutRedirectUri:this.config.redirectUri});}finally{await this.invalidate();this.interacting=false;}}
  async request(path,options={}){
-  const denied=readOnlyRejection(options.method??'GET');if(denied)return denied;
+  const denied=currentOnlyRejection(path,options);if(denied)return denied;
   if(!this.authorized||this.msal.getActiveAccount()?.homeAccountId!==this.authorized)throw Error('Verified session required');
   const generation=this.generation;
   const transport=new DotBoardTransport(this.config,this.msal,(url,init)=>{

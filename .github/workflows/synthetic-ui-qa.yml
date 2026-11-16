@@ -1,0 +1,28 @@
+name: Synthetic UI QA (no deployment)
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  synthetic-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - run: npm --prefix frontend-auth ci --ignore-scripts --no-fund
+      - run: npm install --prefix verification --no-save --ignore-scripts playwright@1.56.1
+      - run: ./verification/node_modules/.bin/playwright install --with-deps chromium
+      - name: Run local-only synthetic UI
+        shell: bash
+        run: |
+          cp verification/ui-synthetic.{html,tsx} frontend-auth/
+          trap 'rm -f frontend-auth/ui-synthetic.{html,tsx}; kill "$server" 2>/dev/null || true' EXIT
+          (cd frontend-auth && ./node_modules/.bin/vite --host 127.0.0.1 --port 5179) > /tmp/vite.log 2>&1 &
+          server=$!
+          for i in {1..30}; do curl --fail http://127.0.0.1:5179/ui-synthetic.html >/dev/null 2>&1 && break; sleep 1; done
+          node verification/db-ui-test.cjs

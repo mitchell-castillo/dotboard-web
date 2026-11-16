@@ -212,7 +212,7 @@ export default function ProjectInstructions({board,busy,onClose,returnFocus,refr
           <div className="instructions-tabs" role="group" aria-label="Vista de las instrucciones">
             <button ref={readerTabRef} type="button" aria-pressed={view==="read"} disabled={blocked} onClick={()=>setView("read")}><BookOpen size={15}/>Leer</button>
             <button type="button" aria-pressed={view==="edit"} disabled={blocked||loading||!ready} onClick={edit}><Pencil size={15}/>{draft?"Borrador":"Editar"}</button>
-            <button type="button" aria-pressed={view==="history"} disabled={blocked||loading} onClick={showHistory}><History size={15}/>Historial</button>
+            <button type="button" aria-pressed={view==="history"} disabled title="El modo actual no conserva versiones anteriores" onClick={showHistory}><History size={15}/>Historial</button>
           </div>
           <button type="button" className="icon-button" disabled={blocked||loading||historyLoading} onClick={()=>{void loadCurrent();if(view==="history")void loadHistory();}} aria-label="Actualizar instrucciones guardadas" title="Actualizar la versión guardada, sin cambiar el borrador"><RefreshCw size={16} className={loading?"animate-spin":""}/></button>
         </div>

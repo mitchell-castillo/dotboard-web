@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {parseCurrentBackup,makeImportRequest,IMPORT_MAX_BYTES} from './current-import.mjs';
+import {currentOnlyRejection} from './current-only-policy.mjs';
+const backup=()=>({format:'dot-board-local-backup',formatVersion:1,revision:7,workspace:{boards:[],archivedCards:[]}});
+test('current v1 export retains all fields and revision',()=>{const b=backup();b.workspace.extension={safe:true};assert.deepEqual(parseCurrentBackup(JSON.stringify(b)),b);});
+for(const field of ['snapshots','versions','history','importedHistory'])test('reject historical '+field,()=>{const b=backup();b.workspace[field]=[];assert.throws(()=>parseCurrentBackup(JSON.stringify(b)));});
+test('invalid format revision schema and oversize rejected',()=>{for(const revision of [-1,null,1.5,Number.MAX_SAFE_INTEGER+1])assert.throws(()=>parseCurrentBackup(JSON.stringify({...backup(),revision})));assert.throws(()=>parseCurrentBackup(' '.repeat(IMPORT_MAX_BYTES+1)));assert.throws(()=>parseCurrentBackup('{}'));});
+test('import exact body two properties, replay stable requestId',()=>{const body=makeImportRequest(backup(),'00000000-0000-4000-8000-000000000001');assert.deepEqual(Object.keys(JSON.parse(body)),['requestId','backup']);assert.equal(body,makeImportRequest(backup(),'00000000-0000-4000-8000-000000000001'));});
+test('editing and import allowed, destructive/history/restore blocked',()=>{assert.equal(currentOnlyRejection('/workspace',{method:'POST',body:{operation:{action:'create-card'}}}),null);assert.equal(currentOnlyRejection('/workspace/current-import',{method:'POST'}),null);for(const path of ['/workspace/restore','/workspace/instructions/history','/workspace/snapshots'])assert.equal(currentOnlyRejection(path,{method:path.includes('history')?'GET':'POST'}).status,400);assert.equal(currentOnlyRejection('/workspace',{method:'POST',body:{operation:{action:'delete-card'}}}).status,400);});
