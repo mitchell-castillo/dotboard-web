@@ -9,6 +9,20 @@ const assert=require('node:assert/strict');
  await page.route('**/*',route=>{const u=new URL(route.request().url());return u.hostname==='127.0.0.1'?route.continue():route.abort();});
  await page.goto('http://127.0.0.1:5179/ui-synthetic.html');
  await page.getByText('Prepara tu DotBoard').waitFor();
+ const picker=page.getByRole('button',{name:'Seleccionar archivo JSON',exact:true});
+ assert.equal(await picker.isEnabled(),true);
+ const importButton=page.getByRole('button',{name:'Importar tablero actual',exact:true});
+ assert.equal(await importButton.isDisabled(),true);
+ assert.equal(await importButton.evaluate(el=>getComputedStyle(el).cursor),'not-allowed');
+ // A real user click must emit a native chooser, not merely allow setInputFiles.
+ const chooserPromise=page.waitForEvent('filechooser');
+ await picker.click();const chooser=await chooserPromise;
+ assert.equal(await chooser.element().getAttribute('type'),'file');
+ // Cancel then reopen by keyboard; neither action may import anything.
+ await chooser.setFiles([]);
+ assert.equal(await picker.isEnabled(),true);
+ const reopen=page.waitForEvent('filechooser');await picker.focus();await page.keyboard.press('Enter');await (await reopen).setFiles([]);
+ assert.equal(await page.evaluate(()=>window.testRequests.filter(r=>r.path==='/workspace/current-import').length),0);
  await page.evaluate(()=>sessionStorage.setItem('qa-drop-import','1'));
  await page.locator('input[type=file]').setInputFiles({name:'synthetic.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dot-board-local-backup',formatVersion:1,revision:7,workspace:{boards:[],archivedCards:[]}}))});
  await page.getByRole('button',{name:'Importar tablero actual'}).click();
