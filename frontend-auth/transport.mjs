@@ -20,7 +20,7 @@ export function validateConfig(config, pageOrigin) {
 
 // Caller must supply an initialized official MSAL instance; dependency injection is for tests only.
 export class DotBoardTransport {
-  constructor(config, msal, fetchImpl = fetch) { this.config=config; this.msal=msal; this.fetchImpl=fetchImpl; this.interacting=false; }
+  constructor(config, msal, fetchImpl = fetch) { this.config=config; this.msal=msal; this.fetchImpl=fetchImpl.bind(globalThis); this.interacting=false; }
   async initialize() {
     await this.msal.initialize();
     const response = await this.msal.handleRedirectPromise();
