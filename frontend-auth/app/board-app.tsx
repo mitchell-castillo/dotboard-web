@@ -1,3 +1,4 @@
+import {readFreshWorkspace} from '../fresh-workspace.mjs';
 import {readOnlyMessage} from '../read-only-policy.mjs';
 import {PendingWrite} from "@/lib/pending-write";
 import {apiFetch} from "@/lib/api-client";
@@ -142,7 +143,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
     const required=(input:Record<string,unknown>,key:string)=>{if(typeof input[key]!=="string"||!(input[key] as string).trim())throw new Error("Missing "+key);return (input[key] as string).trim();};
     const tools:Tool[]=[
       {name:"create_board",title:"Create board",description:"Create and save a board with To do, In progress, and Done columns.",inputSchema:{type:"object",properties:{name:{type:"string",minLength:1,maxLength:120},description:{type:"string",maxLength:5000}},required:["name"],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async(input)=>{const p=inputObject(input);const result=await mutate({action:"create-board",name:required(p,"name"),description:typeof p.description==="string"?p.description:"",color:BOARD_COLORS[0]});if(result.id)setSelected(result.id);return result;}},
-      {name:"read_workspace",title:"Read boards",description:"Return the boards, columns, and cards in the current workspace.",inputSchema:{type:"object",properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:()=>JSON.parse(JSON.stringify(stateRef.current))},
+      {name:"read_workspace",title:"Read boards",description:"Fetch all boards, columns, cards and workspace metadata from the authenticated API now. Fails if authentication or the network is unavailable; never returns a cached fallback.",inputSchema:{type:"object",properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:async()=>{const fresh=await readFreshWorkspace(apiFetch) as Workspace;return fresh;}},
       {name:"create_card",title:"Create card",description:"Create and save a card in an existing board and column. Get their IDs with read_workspace.",inputSchema:{type:"object",properties:{boardId:{type:"string"},columnId:{type:"string"},title:{type:"string",minLength:1,maxLength:200},description:{type:"string",maxLength:5000}},required:["boardId","columnId","title"],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async(input)=>{const p=inputObject(input);const b=required(p,"boardId");const result=await mutate({action:"create-card",boardId:b,columnId:required(p,"columnId"),title:required(p,"title"),description:typeof p.description==="string"?p.description:"",label:""});setSelected(b);return result;}},
       {name:"move_card",title:"Move card",description:"Move and save a card at the end of a column, on the same board or another board. Get the IDs with read_workspace.",inputSchema:{type:"object",properties:{cardId:{type:"string"},boardId:{type:"string"},columnId:{type:"string"}},required:["cardId","boardId","columnId"],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async(input)=>{const p=inputObject(input);const b=required(p,"boardId");await mutate({action:"move-card",cardId:required(p,"cardId"),boardId:b,columnId:required(p,"columnId")});setSelected(b);return {moved:true,boardId:b};}}
     ];
@@ -345,3 +346,4 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
     <ArchiveUndo entries={undoArchives} busy={busy} onUndo={entry=>void undoArchive(entry)} onDismiss={dismissUndo}/>
   </div>;
 }
+

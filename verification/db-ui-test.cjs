@@ -63,6 +63,22 @@ const assert=require('node:assert/strict');
  });
  assert.deepEqual(nativeResult,[true,true]);
  console.log('PASS: browser-native default fetch in base and popup transports without Illegal invocation.');
+ let freshGetCount=100;
+ await page.route('http://127.0.0.1:5179/fresh-api/workspace',route=>{assert.equal(route.request().method(),'GET');return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({workspace:{revision:++freshGetCount,boards:[]}})});});
+
+ // Fresh reads use native authenticated fetch, never the rendered workspace cache.
+ const freshReads=await page.evaluate(async()=>{
+  const {readFreshWorkspace}=await import('/fresh-workspace.mjs');
+  const {DotBoardTransport}=await import('/transport.mjs');
+  const account={homeAccountId:'synthetic-browser-account'};let renewals=0;
+  const msal={getActiveAccount:()=>account,acquireTokenSilent:async()=>{renewals++;return {account,accessToken:'synthetic-only'};}};
+  const transport=new DotBoardTransport({apiScope:'synthetic',apiBaseUrl:location.origin+'/fresh-api'},msal);
+  const api=path=>transport.request(path.slice(4));
+  const first=await readFreshWorkspace(api),second=await readFreshWorkspace(api);
+  return {revisions:[first.revision,second.revision],renewals};
+ });
+ assert.deepEqual(freshReads,{revisions:[101,102],renewals:2});
+ console.log('PASS: each fresh read makes a separate native GET and silent token acquisition.');
  await page.screenshot({path:'synthetic-ui.png',fullPage:true});
  console.log('PASS: interrupted import reuses envelope; create/edit persist across reload; initialized UI does not offer replacement. Synthetic transport only, not backend integration.');
  }finally{await browser.close();}
