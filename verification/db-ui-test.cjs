@@ -73,7 +73,7 @@ const assert=require('node:assert/strict');
   const account={homeAccountId:'synthetic-browser-account'};let renewals=0;
   const msal={getActiveAccount:()=>account,acquireTokenSilent:async()=>{renewals++;return {account,accessToken:'synthetic-only'};}};
   const transport=new DotBoardTransport({apiScope:'synthetic',apiBaseUrl:location.origin+'/fresh-api'},msal);
-  const api=path=>transport.request(path.replace(/^\\/api/,''));
+  const api=path=>transport.request(path.slice(4));
   const first=await readFreshWorkspace(api),second=await readFreshWorkspace(api);
   return {revisions:[first.revision,second.revision],renewals};
  });
