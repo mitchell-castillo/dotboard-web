@@ -18,3 +18,17 @@ test('mutation preserves revision/requestId and exposes409 without retries',asyn
 test('repeated login blocked',async()=>{const f=fixture();await f.transport.login();await assert.rejects(f.transport.login());});
 test('failed login permits deliberate retry',async()=>{const f=fixture();let count=0;f.msal.loginRedirect=async()=>{count++;throw Error('cancelled');};await assert.rejects(f.transport.login());await assert.rejects(f.transport.login());assert.equal(count,2);});
 test('silent token failure does not redirect',async()=>{const f=fixture();f.msal.acquireTokenSilent=async()=>{throw Error('interaction_required');};f.msal.loginRedirect=async()=>{throw Error('must not be called');};await assert.rejects(f.transport.request('/workspace'),/interaction_required/);assert.equal(f.calls.length,0);});
+
+test('injected fetch receives the global receiver, never the transport instance',async()=>{
+ const f=fixture();let receiver;
+ const transport=new DotBoardTransport(base,f.msal,function(){receiver=this;return Promise.resolve(new Response('{}'));});
+ await transport.request('/workspace');
+ assert.equal(receiver,globalThis);
+});
+test('default fetch is bound to the global receiver',async()=>{
+ const original=globalThis.fetch;let receiver;
+ try{globalThis.fetch=function(){receiver=this;return Promise.resolve(new Response('{}'));};
+ const f=fixture();const transport=new DotBoardTransport(base,f.msal);
+ await transport.request('/workspace');assert.equal(receiver,globalThis);
+ }finally{globalThis.fetch=original;}
+});

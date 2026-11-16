@@ -32,6 +32,23 @@ const assert=require('node:assert/strict');
  assert.equal(state.workspace.boards.length,1);assert.equal(state.workspace.boards[0].name,'Synthetic board edited');assert.equal(state.workspace.revision,9);
  assert.equal(await page.getByText('Prepara tu DotBoard').count(),0);
  assert.deepEqual(errors,[]);
+
+ // Exercise actual browser-native fetch default in both transports; local route only.
+ await page.route('http://127.0.0.1:5179/api/workspace',route=>route.fulfill({status:200,contentType:'application/json',body:'{"synthetic":true}'}));
+ const nativeResult=await page.evaluate(async()=>{
+  const {DotBoardTransport}=await import('/transport.mjs');
+  const {PopupSessionTransport}=await import('/app-transport.mjs');
+  const account={homeAccountId:'synthetic-browser-account'};let active=account;
+  const msal={getActiveAccount:()=>active,setActiveAccount:a=>active=a,clearCache:async()=>{},acquireTokenSilent:async()=>({account,accessToken:'synthetic-only'}),acquireTokenPopup:async()=>({account,accessToken:'synthetic-only'})};
+  const config={apiScope:'synthetic',apiBaseUrl:location.origin+'/api',redirectUri:location.origin+'/'};
+  const base=new DotBoardTransport(config,msal);
+  const first=await (await base.request('/workspace')).json();
+  const popup=new PopupSessionTransport(config,msal,undefined,async()=>({verified:true}),async()=>({authenticated:true}));
+  await popup.login();const second=await (await popup.request('/workspace')).json();
+  return [first.synthetic,second.synthetic];
+ });
+ assert.deepEqual(nativeResult,[true,true]);
+ console.log('PASS: browser-native default fetch in base and popup transports without Illegal invocation.');
  await page.screenshot({path:'synthetic-ui.png',fullPage:true});
  console.log('PASS: interrupted import reuses envelope; create/edit persist across reload; initialized UI does not offer replacement. Synthetic transport only, not backend integration.');
  }finally{await browser.close();}

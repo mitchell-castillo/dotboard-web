@@ -14,3 +14,12 @@ test('logout locks concurrent logout and login until completed',async()=>{const 
 
 test('verified session permits editing and import but never delete or restore',async()=>{const {t,calls}=setup();await t.login();await t.request('/workspace',{method:'POST',body:{operation:{action:'create-card'}}});await t.request('/workspace/current-import',{method:'POST',body:{requestId:'test',backup:{}}});assert.equal(calls.length,2);assert.equal((await t.request('/workspace/restore',{method:'POST'})).status,400);assert.equal((await t.request('/workspace',{method:'POST',body:{operation:{action:'delete-card'}}})).status,400);assert.equal(calls.length,2);});
 test('signed out cannot import or edit',async()=>{const {t,calls}=setup();await assert.rejects(t.request('/workspace/current-import',{method:'POST'}));await assert.rejects(t.request('/workspace',{method:'POST',body:{operation:{action:'create-card'}}}));assert.equal(calls.length,0);});
+
+test('popup default fetch remains globally bound through delegated request',async()=>{
+ const original=globalThis.fetch;let receiver;
+ try{globalThis.fetch=function(){receiver=this;return Promise.resolve(new Response('{}'));};
+ const {msal}=setup();
+ const t=new PopupSessionTransport({apiScope:'scope',apiBaseUrl:'https://example.test/api',redirectUri:'https://example.test/'},msal,undefined,async()=>({verified:true}),async()=>({authenticated:true}));
+ await t.login();await t.request('/workspace');assert.equal(receiver,globalThis);
+ }finally{globalThis.fetch=original;}
+});
