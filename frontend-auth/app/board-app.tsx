@@ -11,7 +11,7 @@ import type { Action } from "@/lib/workspace-store";
 import ColumnTriggers from "./column-triggers";
 import CardArchive from "./card-archive";
 import BackupDownload from "./backup-download";
-import LocalBackups from "./local-backups";
+import CurrentImport from "./current-import";
 import CardComments from "./card-comments";
 import CardCreatedAt from "./card-created-at";
 import ProjectInstructions from "./project-instructions";
@@ -32,6 +32,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
   const [darkMode,setDarkMode]=useState(false);
   const [loading,setLoading]=useState(true);
+  const [uninitialized,setUninitialized]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [editor,setEditor]=useState<Editor|null>(null);
@@ -72,7 +73,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
     if(refreshing.current||(silent&&lock.current))return;
     refreshing.current=true;
     if(!silent){setLoading(true);setError("");}
-    try{const r=await apiFetch("/api/workspace",{cache:"no-store"});const data=await r.json() as {workspace:Workspace;error?:string};if(!r.ok)throw new Error(data.error);if(data.workspace.revision>=stateRef.current.revision)updateState(data.workspace);}
+    try{const r=await apiFetch("/api/workspace",{cache:"no-store"});const data=await r.json() as {workspace:Workspace;error?:string};if(!r.ok){if(data.error==='workspace_not_initialized'){setUninitialized(true);return;}throw new Error(data.error);}setUninitialized(false);if(data.workspace.revision>=stateRef.current.revision)updateState(data.workspace);}
     catch(e){setError(e instanceof Error?e.message:"We couldn't load your boards.");}
     finally{refreshing.current=false;if(!silent)setLoading(false);}
   },[updateState]);
@@ -125,6 +126,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
   },[updateState]);
   const mutate=useCallback(async(operation:Action)=>{
     if(readOnly)throw new Error(readOnlyMessage);
+    if(operation.action.startsWith("delete-"))throw new Error("Eliminar está deshabilitado hasta disponer de papelera recuperable.");
     if(lock.current)throw new Error("Wait for the previous change to finish.");
     const requestId="requestId" in operation?operation.requestId:crypto.randomUUID();
     const body=uncertainMutation.current.begin({revision:stateRef.current.revision,requestId,operation});
@@ -247,6 +249,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
   const commentCard=editor?.kind==="card"&&editor.cardId?workspace.boards.flatMap(b=>b.columns.flatMap(c=>c.cards)).find(c=>c.id===editor.cardId):undefined;
   const isEditing=editor&&(editor.kind==="board"?!!editor.boardId:editor.kind==="column"?!!editor.columnId:!!editor.cardId);
   const editorTitle=editor?.kind==="board"?(isEditing?"Edit board":"Create board"):editor?.kind==="column"?(isEditing?"Edit column":"Add column"):(isEditing?"Edit card":"New card");
+  if(uninitialized)return <CurrentImport onImported={next=>{updateState(next);setUninitialized(false);}}/>;
   return <div className="app-shell">
     <aside id="workspace-sidebar" className="sidebar" hidden={sidebarCollapsed}>
       <a href="./" className="brand"><Columns3 size={25}/>DotBoard</a>
@@ -264,7 +267,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
     </aside>
     <main className="main">
       <header className="topbar"><span><button type="button" className="icon-button sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed?"Show sidebar":"Hide sidebar"} title={sidebarCollapsed?"Show sidebar":"Hide sidebar"} aria-expanded={!sidebarCollapsed} aria-controls="workspace-sidebar">{sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}</button><LayoutGrid size={17}/> My boards <span className="breadcrumb-slash">/</span><strong>{board?.name??"My workspace"}</strong></span>
-        <div className="topbar-actions"><BackupDownload compact disabled={loading||busy}/><LocalBackups workspace={workspace} disabled={readOnly||loading||busy||!!editor||!!confirmation||!!instructionsBoardId} onChange={updateState}/><span className="save-status" role="status">{loading||busy?<><Loader2 size={15} className="animate-spin"/><span className="save-status-label">{loading?"Loading…":"Saving…"}</span></>:error?<><AlertCircle size={15}/><span className="save-status-label">Check the notice</span></>:<><Check size={15}/><span className="save-status-label">{readOnly?"Solo lectura":"Saved"}</span></>}</span><CardArchive workspace={workspace} busy={busy} loading={loading} mutate={mutate} onRestore={setSelected}/><button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={darkMode?"Switch to light mode":"Switch to dark mode"} title={darkMode?"Switch to light mode":"Switch to dark mode"}>{darkMode?<Sun size={17}/>:<Moon size={17}/>}</button></div>
+        <div className="topbar-actions"><BackupDownload compact disabled={loading||busy}/><span className="save-status" role="status">{loading||busy?<><Loader2 size={15} className="animate-spin"/><span className="save-status-label">{loading?"Loading…":"Saving…"}</span></>:error?<><AlertCircle size={15}/><span className="save-status-label">Check the notice</span></>:<><Check size={15}/><span className="save-status-label">{readOnly?"Solo lectura":"Saved"}</span></>}</span><CardArchive workspace={workspace} busy={busy} loading={loading} mutate={mutate} onRestore={setSelected}/><button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={darkMode?"Switch to light mode":"Switch to dark mode"} title={darkMode?"Switch to light mode":"Switch to dark mode"}>{darkMode?<Sun size={17}/>:<Moon size={17}/>}</button></div>
       </header>
       {(loading||busy)&&<div className="loading-bar"/>}
       <div className="board-heading"><div className="board-summary"><div className="board-title-row"><span className="board-color" style={{background:board?.color??BOARD_COLORS[0]}}/><h1>{board?.name??"My boards"}</h1>{board&&<span className="board-card-count">{total} {total===1?"card":"cards"}</span>}</div>{board?.description&&<p title={board.description}>{board.description}</p>}</div>
