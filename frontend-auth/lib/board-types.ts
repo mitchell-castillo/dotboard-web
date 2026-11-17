@@ -13,7 +13,7 @@ export type CommentAuthor = {kind:'user';userId:string}|{kind:'dot'};
 export type CardComment = {id:string;requestId:string;body:string;createdAt:number;author:CommentAuthor};
 export type Card = { id: string; title: string; description: string; label: string; createdAt?: number; updatedAt: number; comments?:CardComment[]; automation?: {triggerId: string; scheduledAt: number} };
 export type Column = { id: string; name: string; cards: Card[]; triggers?: ColumnTrigger[] };
-export type Board = { instructions?: ProjectInstructions; id: string; name: string; description: string; color: string; columns: Column[]; expandDescriptionOnOpen?:boolean };
+export type Board = { paused?:boolean; instructions?: ProjectInstructions; id: string; name: string; description: string; color: string; columns: Column[]; expandDescriptionOnOpen?:boolean };
 export function expandsDescriptionOnOpen(board?:Pick<Board,'expandDescriptionOnOpen'>){return board?.expandDescriptionOnOpen!==false;}
 export type ArchivedCard = {card:Card; archivedAt:number; boardId:string; boardName:string; columnId:string; columnName:string; archiveId?:string; position?:number; beforeId?:string; afterId?:string};
 export type Workspace = { boards: Board[]; revision: number; archivedCards?:ArchivedCard[] };

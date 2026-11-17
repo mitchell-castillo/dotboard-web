@@ -15,6 +15,7 @@ const triggerSchedule = z.discriminatedUnion("kind", [
 ]);
 const triggerFields = {...cardFields, schedule: triggerSchedule, enabled: z.boolean()};
 export const actionSchema = z.discriminatedUnion("action", [
+  z.object({action:z.literal("set-board-paused"),boardId:id,paused:z.boolean(),expected:z.boolean()}).strict(),
   z.object({action:z.literal("save-project-instructions"),boardId:id,markdown:markdownSchema,notes:markdownSchema,baseRevisionId:z.string().uuid().nullable(),requestId:z.string().uuid(),sourceRefs:z.array(instructionSourceSchema).max(20),changeSummary:z.string().max(500)}).strict(),
   z.object({action:z.literal("add-comment"),cardId:id,body:z.string().trim().min(1,"Escribe un comentario.").max(5000,"Usa un máximo de 5,000 caracteres."),requestId:z.string().uuid()}).strict(),
   z.object({action:z.literal("create-board"),name,description,color:z.enum(BOARD_COLORS as [string,...string[]]),expandDescriptionOnOpen:z.boolean().optional()}),
