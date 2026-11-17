@@ -28,6 +28,8 @@ bindTransport({request:async(path:string,options:any)=>{
   let id=op.boardId;
   if(op.action==='create-board'){id=crypto.randomUUID();w.boards.push({id,name:op.name,description:op.description,color:op.color,columns:['To do','In progress','Done'].map(name=>({id:crypto.randomUUID(),name,cards:[]}))});}
   else if(op.action==='update-board'){const b=w.boards.find((b:any)=>b.id===id);Object.assign(b,{name:op.name,description:op.description,color:op.color});}
+  else if(op.action==='trash-board'){if(sessionStorage.getItem('qa-reject-trash')==='1'){sessionStorage.removeItem('qa-reject-trash');return Response.json({error:'invalid_operation'},{status:400});}const b=w.boards.find((b:any)=>b.id===id);if(!b)return Response.json({error:'board_not_found'},{status:404});w.trashedBoards??=[];w.trashedBoards.push({id:crypto.randomUUID(),board:b,archivedCards:(w.archivedCards??[]).filter((a:any)=>a.boardId===id),trashedAt:Date.now(),expiresAt:Date.now()+30*86400000});w.boards=w.boards.filter((b:any)=>b.id!==id);w.archivedCards=(w.archivedCards??[]).filter((a:any)=>a.boardId!==id);}
+  else if(op.action==='restore-board'){const t=w.trashedBoards.find((t:any)=>t.id===op.trashId);w.boards.push(t.board);w.archivedCards.push(...t.archivedCards);w.trashedBoards=w.trashedBoards.filter((t:any)=>t.id!==op.trashId);id=t.board.id;}
   else throw Error('Unsupported synthetic operation '+op.action);
   w.revision++;const result={workspace:w,result:{id}};state.receipts[body.requestId]=result;write(state);return Response.json(result);
  }

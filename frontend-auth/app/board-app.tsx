@@ -11,6 +11,7 @@ import { BOARD_COLORS, LABELS, expandsDescriptionOnOpen, type Workspace, type Ca
 import type { Action } from "@/lib/workspace-store";
 import ColumnTriggers from "./column-triggers";
 import CardArchive from "./card-archive";
+import BoardTrash from "./board-trash";
 import BackupDownload from "./backup-download";
 import CurrentImport from "./current-import";
 import CardComments from "./card-comments";
@@ -168,7 +169,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
     else{const fields={boardId:draft.boardId,columnId:draft.columnId,title:draft.title,description:draft.description,label:draft.label as ""|"idea"|"task"|"urgent"};operation=editor.cardId?{action:"update-card",cardId:editor.cardId,expected:archiveExpected.current,...fields}:{action:"create-card",...fields};}
     try{const result=await mutate(operation);if(operation.action==="create-board"&&result.id)setSelected(result.id);if(editor.kind==="card")setSelected(draft.boardId);setEditor(null);}catch{}
   }
-  async function confirmDelete(){if(!confirmation||busy||lock.current)return;try{await mutate(confirmation.operation);setConfirmation(null);setEditor(null);}catch{}}
+  async function confirmDelete(){if(!confirmation||busy||lock.current)return;try{await mutate(confirmation.operation);setConfirmation(null);setEditor(null);}catch(e){setFormError(e instanceof Error?e.message:"No se pudo completar la operación.");}}
   async function archiveCard(){
     if(editor?.kind!=="card"||!editor.cardId||busy||lock.current||draft.description.length>5000)return;
     try{const result=await mutate({action:"archive-card",cardId:editor.cardId,expected:archiveExpected.current,changes:{boardId:draft.boardId,columnId:draft.columnId,title:draft.title,description:draft.description,label:draft.label as ""|"idea"|"task"|"urgent"}});if(result.archiveId)setUndoArchives(entries=>[...entries,{cardId:editor.cardId!,archiveId:result.archiveId!,title:draft.title}]);setEditor(null);}catch{}
@@ -270,6 +271,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
           </button>)}
           {!workspace.boards.some(b=>(b.paused===true)===paused)&&<p className="board-group-empty">{paused?"Ningún tablero pausado":"No hay tableros activos"}</p>}
         </section>)}
+        <BoardTrash workspace={workspace} busy={busy} loading={loading} readOnly={readOnly} mutate={mutate} onRestore={setSelected}/>
         <button className="new-board-nav" onClick={()=>openBoard()} disabled={readOnly||loading||busy}><Plus size={17}/>Create board</button>
       </nav>
       <div className="sidebar-bottom"><LockKeyhole size={15}/><span>Private · Only you</span></div>
@@ -335,11 +337,12 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
         {commentCard&&<CardComments key={commentCard.id} card={commentCard} busy={readOnly||busy} mutate={mutate} fullHeight/>}
         </div>
           <div className="form-actions editor-footer">
-            {isEditing&&<div className="editor-card-actions"><button type="button" className={"button "+(editor?.kind==="card"?"delete-card-action":"danger")} disabled={busy} onClick={()=>{
+            {isEditing&&<div className="editor-card-actions"><button type="button" className={"button "+(editor?.kind==="card"?"delete-card-action":"danger")} disabled={readOnly||busy||editor?.kind!=="board"} aria-describedby={editor?.kind!=="board"?"delete-unavailable":undefined} onClick={()=>{
+              setFormError("");
               if(editor?.kind==="card"&&editor.cardId)setConfirmation({title:"Delete card?",description:"This card will be removed from the board. Archive it instead to retain it indefinitely in this private board. A pre-change snapshot is also saved privately.",operation:{action:"delete-card",cardId:editor.cardId}});
-              else if(editor?.kind==="board"&&editor.boardId)setConfirmation({title:"Delete board?",description:"This board, its columns, and all its cards will be deleted.",operation:{action:"delete-board",boardId:editor.boardId}});
+              else if(editor?.kind==="board"&&editor.boardId)setConfirmation({title:"¿Mover tablero a la papelera?",description:"Se retirará de tus tableros, pero conservará sus columnas, tarjetas, comentarios y archivos de tarjetas archivadas. Puedes restaurarlo desde Papelera. Se conservará al menos 30 días; no se borrará definitivamente de forma automática.",operation:{action:"trash-board",boardId:editor.boardId}});
               else if(editor?.kind==="column"&&editor.columnId)setConfirmation({title:"Delete column?",description:"The column must be empty. The board needs at least one column.",operation:{action:"delete-column",boardId:editor.boardId,columnId:editor.columnId}});
-            }}><Trash2 size={16}/><span>Delete</span></button></div>}
+            }}><Trash2 size={16}/><span>{editor?.kind==="board"?"Mover a papelera":"Eliminar no disponible"}</span></button>{editor?.kind!=="board"&&<small id="delete-unavailable">La eliminación de este elemento sigue bloqueada hasta contar con recuperación segura.</small>}</div>}
             <button className="button secondary" type="button" onClick={()=>{if(!lock.current)setEditor(null);}} disabled={busy}>Cancel</button><button className="button primary" type="submit" form="workspace-editor" disabled={readOnly||busy||draft.description.length>5000}>{busy?<><Loader2 size={16} className="animate-spin"/>Saving…</>:isEditing?"Save changes":editor?.kind==="board"?"Create board":editor?.kind==="column"?"Add column":"Create card"}</button>
           </div>
 
@@ -348,7 +351,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
     <Dialog open={!!confirmation} onOpenChange={open=>{if(!open&&!busy)setConfirmation(null);}}>
       <DialogContent className="modal" role="alertdialog" showCloseButton={false} onOpenAutoFocus={e=>{e.preventDefault();deleteCancelRef.current?.focus();}}><DialogTitle className="modal-title">{confirmation?.title}</DialogTitle><DialogDescription className="modal-desc">{confirmation?.description}</DialogDescription>
         {formError&&<div className="inline-error" role="alert">{formError}</div>}
-        <div className="form-actions"><button ref={deleteCancelRef} type="button" className="button secondary" onClick={()=>setConfirmation(null)} disabled={busy}>Cancel</button><button type="button" className="button danger" style={{marginRight:0}} onClick={()=>void confirmDelete()} disabled={readOnly||busy}>{busy?"Deleting…":confirmation?.operation.action==="delete-card"?"Delete permanently":"Yes, delete"}</button></div>
+        <div className="form-actions"><button ref={deleteCancelRef} type="button" className="button secondary" onClick={()=>setConfirmation(null)} disabled={busy}>Cancel</button><button type="button" className="button danger" style={{marginRight:0}} onClick={()=>void confirmDelete()} disabled={readOnly||busy}>{busy?"Deleting…":confirmation?.operation.action==="trash-board"?"Mover a papelera":confirmation?.operation.action==="delete-card"?"Delete permanently":"Yes, delete"}</button></div>
       </DialogContent>
     </Dialog>
     {instructionsBoard&&<ProjectInstructions key={instructionsBoard.id} board={instructionsBoard} busy={busy} onClose={()=>{setInstructionsBoardId(null);setInstructionsBoardSnapshot(null);}} returnFocus={instructionsReturnFocus.current} refreshWorkspace={refreshInstructionsWorkspace} save={async operation=>{await mutate(operation);return stateRef.current.boards.find(b=>b.id===operation.boardId)?.instructions??null;}}/>}
