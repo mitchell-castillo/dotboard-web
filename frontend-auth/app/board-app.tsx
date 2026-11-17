@@ -120,7 +120,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
       if(data.workspace&&data.workspace.revision>=stateRef.current.revision)updateState(data.workspace);
       if(!r.ok){
         if(uncertainMutation.current.rejectDefinitively(r.status,data.error))setRecoveryAvailable(false);
-        throw new Error(data.error==='revision_conflict'?'El cambio fue rechazado por una revisión más reciente. Recarga y revisa tu borrador antes de reenviarlo.':data.error??"No se pudo confirmar el cambio. El envío original se conserva.");
+        throw new Error(data.error==='revision_conflict'?'El cambio fue rechazado por una revisión más reciente. Recarga y revisa tu borrador antes de reenviarlo.':r.status===409&&data.error==='invalid_operation'?'El cambio fue rechazado por una edición más reciente. Conserva tu borrador, cierra el diálogo y recarga antes de volver a abrir el elemento.':data.error??"No se pudo confirmar el cambio. El envío original se conserva.");
       }
       if(!data.workspace)throw new Error("El resultado no se confirmó; se conserva el envío original.");
       uncertainMutation.current.acknowledgeSuccess();setRecoveryAvailable(false);
@@ -290,7 +290,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
       {board?.paused&&<div className="board-pause-notice" role="status"><Pause size={18}/><div><strong>Este tablero está pausado</strong><p>Sus tarjetas e historial se conservan y puedes seguir consultándolos y editándolos. Los disparadores del tablero no crean tarjetas mientras esté pausado.</p><small>Las tareas externas ya iniciadas no se cancelan automáticamente.</small></div></div>}
       {recoveryAvailable&&<div className="error-banner" role="status"><span>Resultado pendiente. La recuperación reenvía exactamente la revisión, operación e ID originales, aunque el tablero haya cambiado.</span><button disabled={busy} onClick={()=>void recoverMutation()}>Recuperar resultado</button></div>}
       {error&&<div className="error-banner" role="alert"><AlertCircle size={18}/><span>{error}</span><button onClick={()=>void load()} disabled={busy}>Reload</button></div>}
-      {remindersSelected?<Reminders module={workspace.reminders} busy={busy||loading||recoveryAvailable} readOnly={readOnly} mutate={mutate}/>:board?<>
+      {remindersSelected?<Reminders module={workspace.reminders} busy={busy||loading} pending={recoveryAvailable} readOnly={readOnly} mutate={mutate}/>:board?<>
         <div className="kanban">
           {board.columns.map(c=><section key={c.id} className={"column"+(dropTarget===c.id?" drag-target":"")+(draggingColumn===c.id?" column-dragging":"")+(columnTarget?.id===c.id?" column-drop-"+columnTarget.side:"")} aria-label={c.name}
             onDragEnter={e=>previewDrop(e,c.id)} onDragOver={e=>previewDrop(e,c.id)}

@@ -30,6 +30,17 @@ bindTransport({request:async(path:string,options:any)=>{
   else if(op.action==='update-board'){const b=w.boards.find((b:any)=>b.id===id);Object.assign(b,{name:op.name,description:op.description,color:op.color});}
   else if(op.action==='trash-board'){if(sessionStorage.getItem('qa-reject-trash')==='1'){sessionStorage.removeItem('qa-reject-trash');return Response.json({error:'invalid_operation'},{status:400});}const b=w.boards.find((b:any)=>b.id===id);if(!b)return Response.json({error:'board_not_found'},{status:404});w.trashedBoards??=[];w.trashedBoards.push({id:crypto.randomUUID(),board:b,archivedCards:(w.archivedCards??[]).filter((a:any)=>a.boardId===id),trashedAt:Date.now(),expiresAt:Date.now()+30*86400000});w.boards=w.boards.filter((b:any)=>b.id!==id);w.archivedCards=(w.archivedCards??[]).filter((a:any)=>a.boardId!==id);}
   else if(op.action==='restore-board'){const t=w.trashedBoards.find((t:any)=>t.id===op.trashId);w.boards.push(t.board);w.archivedCards.push(...t.archivedCards);w.trashedBoards=w.trashedBoards.filter((t:any)=>t.id!==op.trashId);id=t.board.id;}
+  else if(op.action==='update-reminder-local'){
+   if(sessionStorage.getItem('qa-reminder-conflict')==='1'){sessionStorage.removeItem('qa-reminder-conflict');return Response.json({error:'revision_conflict'},{status:409});}
+   if(sessionStorage.getItem('qa-reminder-local-conflict')==='1'){sessionStorage.removeItem('qa-reminder-local-conflict');return Response.json({error:'invalid_operation'},{status:409});}
+   const series=w.reminders.series.find((r:any)=>r.id===op.seriesId);
+   if((series.local.revision??0)!==op.expectedLocalRevision)return Response.json({error:'invalid_operation'},{status:409});
+   if((series.local.title??'')!==op.title||(series.local.notes??'')!==op.notes){
+    if(op.title)series.local.title=op.title;else delete series.local.title;
+    if(op.notes)series.local.notes=op.notes;else delete series.local.notes;
+    series.local.revision=(series.local.revision??0)+1;
+   }
+  }
   else if(op.action==='edit-reminder-occurrence'){
    if(sessionStorage.getItem('qa-reminder-conflict')==='1'){sessionStorage.removeItem('qa-reminder-conflict');return Response.json({error:'revision_conflict'},{status:409});}
    if(sessionStorage.getItem('qa-reminder-expired')==='1'){sessionStorage.removeItem('qa-reminder-expired');return Response.json({error:'session_expired'},{status:401});}
@@ -39,7 +50,9 @@ bindTransport({request:async(path:string,options:any)=>{
    occurrence.localRevision=(occurrence.localRevision??0)+1;
   }
   else throw Error('Unsupported synthetic operation '+op.action);
-  w.revision++;const result={workspace:w,result:{id}};state.receipts[body.requestId]=result;write(state);return Response.json(result);
+  w.revision++;const result={workspace:w,result:{id}};state.receipts[body.requestId]=result;write(state);
+  if(op.action==='update-reminder-local'&&sessionStorage.getItem('qa-drop-reminder-local')==='1'){sessionStorage.removeItem('qa-drop-reminder-local');throw Error('Synthetic interrupted response');}
+  return Response.json(result);
  }
  throw Error('Unexpected synthetic route '+path);
 }} as any);

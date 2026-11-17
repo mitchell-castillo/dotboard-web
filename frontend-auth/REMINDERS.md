@@ -16,6 +16,23 @@ Mutations use the existing verified session, revision, exact request receipt,
 uncertain-write recovery and per-occurrence local revision. No notification
 transport, secret, source API key or real reminder fixture ships to the browser.
 
+The detail panel offers **Editar recordatorio** for a local title and note.
+An empty title restores the source display; an empty note removes it. The source
+message remains readable. Notes persist until removed and do not create recurring
+charges or occurrences. Cancel, Close, Escape and outside dismissal discard only
+the unsent draft. Saving uses the workspace envelope/receipt and
+local.revision compare-and-swap; double submission is blocked.
+
+After an uncertain response, editing stays disabled. The dialog can be closed to
+use **Recuperar resultado**, which resends the exact original envelope. Reopen the
+record after confirmation to see accepted values. Conflicts retain the draft for
+review and never silently overwrite another edit.
+
+The editor explicitly excludes source frequency/date changes: no local recurrence
+generator is implemented. Use the existing verified-timezone future-date snooze
+control for one occurrence. Source data, all other occurrences, original dates,
+history, RemindMe and notifications are preserved.
+
 The exact once-month/week legacy frequencies are shown as `1 random day a month`
 or `1 random day a week`, consistent with their verified RemindMe calculators.
 When explicitly confirmed, DotBoard stores typed local random-day intent with a
