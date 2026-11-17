@@ -30,6 +30,14 @@ bindTransport({request:async(path:string,options:any)=>{
   else if(op.action==='update-board'){const b=w.boards.find((b:any)=>b.id===id);Object.assign(b,{name:op.name,description:op.description,color:op.color});}
   else if(op.action==='trash-board'){if(sessionStorage.getItem('qa-reject-trash')==='1'){sessionStorage.removeItem('qa-reject-trash');return Response.json({error:'invalid_operation'},{status:400});}const b=w.boards.find((b:any)=>b.id===id);if(!b)return Response.json({error:'board_not_found'},{status:404});w.trashedBoards??=[];w.trashedBoards.push({id:crypto.randomUUID(),board:b,archivedCards:(w.archivedCards??[]).filter((a:any)=>a.boardId===id),trashedAt:Date.now(),expiresAt:Date.now()+30*86400000});w.boards=w.boards.filter((b:any)=>b.id!==id);w.archivedCards=(w.archivedCards??[]).filter((a:any)=>a.boardId!==id);}
   else if(op.action==='restore-board'){const t=w.trashedBoards.find((t:any)=>t.id===op.trashId);w.boards.push(t.board);w.archivedCards.push(...t.archivedCards);w.trashedBoards=w.trashedBoards.filter((t:any)=>t.id!==op.trashId);id=t.board.id;}
+  else if(op.action==='edit-reminder-occurrence'){
+   if(sessionStorage.getItem('qa-reminder-conflict')==='1'){sessionStorage.removeItem('qa-reminder-conflict');return Response.json({error:'revision_conflict'},{status:409});}
+   if(sessionStorage.getItem('qa-reminder-expired')==='1'){sessionStorage.removeItem('qa-reminder-expired');return Response.json({error:'session_expired'},{status:401});}
+   const series=w.reminders.series.find((r:any)=>r.id===op.seriesId),occurrence=series.occurrences.find((o:any)=>o.id===op.occurrenceId);
+   if((occurrence.localRevision??0)!==op.expectedLocalRevision)return Response.json({error:'invalid_operation'},{status:409});
+   if(op.change==='complete'){occurrence.state='completed';occurrence.completedAt=Date.now();}else occurrence.snoozedUntil=op.snoozedUntil;
+   occurrence.localRevision=(occurrence.localRevision??0)+1;
+  }
   else throw Error('Unsupported synthetic operation '+op.action);
   w.revision++;const result={workspace:w,result:{id}};state.receipts[body.requestId]=result;write(state);return Response.json(result);
  }

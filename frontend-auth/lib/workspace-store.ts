@@ -15,6 +15,7 @@ const triggerSchedule = z.discriminatedUnion("kind", [
 ]);
 const triggerFields = {...cardFields, schedule: triggerSchedule, enabled: z.boolean()};
 export const actionSchema = z.discriminatedUnion("action", [
+  z.object({action:z.literal('edit-reminder-occurrence'),seriesId:id,occurrenceId:id,expectedLocalRevision:z.number().int().min(0),change:z.enum(['complete','snooze']),snoozedUntil:z.number().int().nullable()}).strict(),
   z.object({action:z.literal("trash-board"),boardId:id}).strict(),
   z.object({action:z.literal("restore-board"),trashId:id}).strict(),
   z.object({action:z.literal("set-board-paused"),boardId:id,paused:z.boolean(),expected:z.boolean()}).strict(),

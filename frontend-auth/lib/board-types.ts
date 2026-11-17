@@ -1,4 +1,5 @@
 import type { ProjectInstructions } from './project-instructions';
+import type { ReminderModule } from './reminders';
 export type TriggerSchedule =
   | { kind: "weekly"; weekdays: number[] }
   | { kind: "monthly-day"; day: number }
@@ -17,7 +18,7 @@ export type Board = { paused?:boolean; instructions?: ProjectInstructions; id: s
 export function expandsDescriptionOnOpen(board?:Pick<Board,'expandDescriptionOnOpen'>){return board?.expandDescriptionOnOpen!==false;}
 export type ArchivedCard = {card:Card; archivedAt:number; boardId:string; boardName:string; columnId:string; columnName:string; archiveId?:string; position?:number; beforeId?:string; afterId?:string};
 export type TrashedBoard = {id:string;board:Board;archivedCards:ArchivedCard[];trashedAt:number;expiresAt:number};
-export type Workspace = { boards: Board[]; trashedBoards?:TrashedBoard[]; revision: number; archivedCards?:ArchivedCard[] };
+export type Workspace = { reminders?:ReminderModule; boards: Board[]; trashedBoards?:TrashedBoard[]; revision: number; archivedCards?:ArchivedCard[] };
 export const BOARD_COLORS = ["#b7dd6b", "#7eb7dd", "#c59cdd", "#e9b86e", "#dd9494", "#7cc5b8"];
 export const LABELS: Record<string, {name: string; background: string; color: string}> = {
   idea: {name: "Idea", background: "#eaf0fd", color: "#5d78b7"},
