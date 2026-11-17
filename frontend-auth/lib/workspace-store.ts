@@ -15,6 +15,7 @@ const triggerSchedule = z.discriminatedUnion("kind", [
 ]);
 const triggerFields = {...cardFields, schedule: triggerSchedule, enabled: z.boolean()};
 export const actionSchema = z.discriminatedUnion("action", [
+  z.object({action:z.literal('update-reminder-local'),seriesId:id,expectedLocalRevision:z.number().int().min(0).max(2147483646),title:z.string().max(200,'Usa un máximo de 200 caracteres.').refine(value=>value===value.trim()&&!/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value),'Usa un título de una sola línea.'),notes:z.string().max(5000,'Usa un máximo de 5,000 caracteres.').regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]*$/,'La nota contiene caracteres no válidos.')}).strict(),
   z.object({action:z.literal('edit-reminder-occurrence'),seriesId:id,occurrenceId:id,expectedLocalRevision:z.number().int().min(0),change:z.enum(['complete','snooze']),snoozedUntil:z.number().int().nullable()}).strict(),
   z.object({action:z.literal("trash-board"),boardId:id}).strict(),
   z.object({action:z.literal("restore-board"),trashId:id}).strict(),
