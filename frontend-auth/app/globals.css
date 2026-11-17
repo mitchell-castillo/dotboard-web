@@ -375,3 +375,4 @@
 .board-pause-notice { display:flex; gap:12px; margin:0 28px 20px; padding:16px; border:1px solid #bba768; border-radius:12px; background:var(--card,#fff9e8); color:var(--foreground,#554720); }
 .board-pause-notice p { margin:5px 0; font-size:14px; }
 .board-pause-action { white-space:nowrap; }
+.board-trash-list{display:grid;gap:14px;list-style:none;padding:0;margin:0}.board-trash-list li{display:flex;gap:18px;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:10px;padding:14px}.board-trash-list strong{overflow-wrap:anywhere}.board-trash-list p,.board-trash-list small{font-size:.8rem;color:var(--muted-foreground)}.board-trash-list .button{flex-shrink:0}.editor-card-actions>small{display:block;font-size:.75rem;max-width:260px;color:var(--muted-foreground)}@media(max-width:540px){.board-trash-list li{flex-direction:column;align-items:stretch}}
