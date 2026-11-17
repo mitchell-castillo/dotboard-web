@@ -1,5 +1,5 @@
 export type ReminderOccurrence={id:string;originalDate:string|null;dueAt:number|null;state:'pending'|'awaiting-completion'|'por-confirmar'|'completed';sourceState?:number|null;snoozedUntil?:number;completedAt?:number;localRevision?:number};
-export type ReminderSeries={id:string;source:{system:'RemindMe';ownerId:string;id:string};sourceRecord:Record<string,unknown>&{Message?:string;UserRequest?:string;Frequency?:string;IanaTimeZoneId?:string;Hours?:string[]};local:{title?:string;notes?:string};occurrences:ReminderOccurrence[];importedAt:number};
+export type ReminderSeries={id:string;source:{system:'RemindMe';ownerId:string;id:string};sourceRecord:Record<string,unknown>&{Message?:string;UserRequest?:string;Frequency?:string;IanaTimeZoneId?:string;Hours?:string[]};local:{title?:string;notes?:string;revision?:number};occurrences:ReminderOccurrence[];importedAt:number};
 export type ReminderModule={schemaVersion:1;notificationsEnabled:false;series:ReminderSeries[]};
 export type AgendaFilter='today'|'overdue'|'week'|'upcoming'|'confirm'|'completed'|'all';
 export type ReminderRow={series:ReminderSeries;occurrence:ReminderOccurrence};
