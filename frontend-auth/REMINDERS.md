@@ -32,3 +32,11 @@ The editor explicitly excludes source frequency/date changes: no local recurrenc
 generator is implemented. Use the existing verified-timezone future-date snooze
 control for one occurrence. Source data, all other occurrences, original dates,
 history, RemindMe and notifications are preserved.
+
+The exact once-month/week legacy frequencies are shown as `1 random day a month`
+or `1 random day a week`, consistent with their verified RemindMe calculators.
+When explicitly confirmed, DotBoard stores typed local random-day intent with a
+rule revision. The source frequency remains readable as provenance, and reimport
+cannot replace the local intent. The UI states that local random selection is not
+implemented and the recalculation basis is still unresolved. No dates are changed
+and no fixed-date or calendar-period calculation is chosen.

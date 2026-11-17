@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {agenda,calendarDays,dateKey,matches,moveMonth,ruleLabel,timezone,zonedInputToInstant} from './lib/reminders.ts';
+import {agenda,calendarDays,dateKey,matches,moveMonth,recurrenceExplanation,recurrenceLabel,ruleLabel,timezone,zonedInputToInstant} from './lib/reminders.ts';
 import {actionSchema} from './lib/workspace-store.ts';
 const now=Date.parse('2026-11-17T14:00:00Z');
 const series=(date,state='pending',tz='America/Santo_Domingo')=>({id:'synthetic',source:{system:'RemindMe',id:'synthetic-origin',ownerId:'synthetic-owner'},sourceRecord:{Message:'Renovar documento sintético',Frequency:'YEARLY',IanaTimeZoneId:tz},local:{},occurrences:[{id:date??'missing',dueAt:date===null?null:Date.parse(date),originalDate:date,state}],importedAt:now});
@@ -15,3 +15,12 @@ test('calendar navigates years and leap/month-end dates without recurrence calcu
 test('two times a year and six month intervals remain different rules',()=>{assert.notEqual(ruleLabel('2_TIMES_A_YEAR'),ruleLabel('EVERY_6_MONTHS'));assert.equal(ruleLabel('YEARLY'),'Anual');assert.equal(ruleLabel('EVERY_MONDAY'),'Semanal');assert.equal(ruleLabel('UNKNOWN_LEGACY'),'Regla de origen conservada');assert.equal(ruleLabel('01_JUL_2027'),'Fecha única');});
 test('local date entry converts verified RD timezone and rejects DST ambiguity',()=>{assert.equal(zonedInputToInstant('2028-02-29T08:00','America/Santo_Domingo'),Date.parse('2028-02-29T12:00Z'));assert.throws(()=>zonedInputToInstant('2027-02-29T08:00','America/Santo_Domingo'));assert.throws(()=>zonedInputToInstant('2026-03-08T02:30','America/New_York'));assert.throws(()=>zonedInputToInstant('2026-11-01T01:30','America/New_York'));});
 test('occurrence edit contract requires local CAS and cannot enable notification',()=>{const op={action:'edit-reminder-occurrence',seriesId:'synthetic',occurrenceId:'occurrence',expectedLocalRevision:0,change:'complete',snoozedUntil:null};assert.ok(actionSchema.safeParse(op).success);assert.ok(!actionSchema.safeParse({...op,expectedLocalRevision:undefined}).success);assert.ok(!actionSchema.safeParse({...op,notificationsEnabled:true}).success);});
+test('exact legacy once-month/week patterns describe random days without a local generator claim',()=>{
+ for(const frequency of ['1_TIME_A_MONTH','1_TIMES_A_MONTH','1_TIME_A_WEEK','1_TIMES_A_WEEK']){const s=series('2027-01-31T12:00Z');s.sourceRecord.Frequency=frequency;assert.equal(recurrenceLabel(s),'1 random day a '+(frequency.endsWith('MONTH')?'month':'week'));assert.match(recurrenceExplanation(s),/todavía no genera nuevas selecciones/);assert.equal(agenda([s],'all','random',now).length,1);}
+ assert.equal(ruleLabel('EVERY_MONDAY'),'Semanal');assert.equal(ruleLabel('1_DAYS_PER_MONTH'),'Regla de origen conservada');assert.equal(ruleLabel('2_TIMES_A_MONTH'),'Regla de origen conservada');
+});
+test('typed local random intent keeps recalculation unresolved and leaves dates intact',()=>{
+ const s=series('2027-01-31T12:00Z');s.sourceRecord.Frequency='1_TIMES_A_MONTH';s.local.recurrence={kind:'random-days',count:1,period:'month',generationStatus:'not-implemented',recalculationBasis:'unresolved',confirmedFromFrequency:'1_TIMES_A_MONTH'};
+ assert.equal(recurrenceLabel(s),'1 random day a month');assert.match(recurrenceExplanation(s),/base de recálculo sigue pendiente/);assert.match(recurrenceExplanation(s),/aún no selecciona días nuevos/);assert.equal(s.occurrences[0].originalDate,'2027-01-31T12:00Z');assert.equal(s.sourceRecord.Frequency,'1_TIMES_A_MONTH');
+ s.sourceRecord.Frequency='EVERY_MONDAY';assert.match(recurrenceExplanation(s),/frecuencia de origen cambió/);assert.equal(recurrenceLabel(s),'1 random day a month');
+});

@@ -1,5 +1,6 @@
 export type ReminderOccurrence={id:string;originalDate:string|null;dueAt:number|null;state:'pending'|'awaiting-completion'|'por-confirmar'|'completed';sourceState?:number|null;snoozedUntil?:number;completedAt?:number;localRevision?:number};
-export type ReminderSeries={id:string;source:{system:'RemindMe';ownerId:string;id:string};sourceRecord:Record<string,unknown>&{Message?:string;UserRequest?:string;Frequency?:string;IanaTimeZoneId?:string;Hours?:string[]};local:{title?:string;notes?:string;revision?:number};occurrences:ReminderOccurrence[];importedAt:number};
+export type RandomDayIntent={kind:'random-days';count:1;period:'month'|'week';generationStatus:'not-implemented';recalculationBasis:'unresolved';confirmedFromFrequency:string};
+export type ReminderSeries={id:string;source:{system:'RemindMe';ownerId:string;id:string};sourceRecord:Record<string,unknown>&{Message?:string;UserRequest?:string;Frequency?:string;IanaTimeZoneId?:string;Hours?:string[]};local:{title?:string;notes?:string;recurrence?:RandomDayIntent;ruleRevision?:number;revision?:number};occurrences:ReminderOccurrence[];importedAt:number};
 export type ReminderModule={schemaVersion:1;notificationsEnabled:false;series:ReminderSeries[]};
 export type AgendaFilter='today'|'overdue'|'week'|'upcoming'|'confirm'|'completed'|'all';
 export type ReminderRow={series:ReminderSeries;occurrence:ReminderOccurrence};
@@ -8,6 +9,8 @@ export function timezone(series:ReminderSeries){const tz=series.sourceRecord.Ian
 export function dateKey(at:number,tz:string){let format=dayFormats.get(tz);if(!format){format=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'});dayFormats.set(tz,format);}return format.format(at);}
 export function dueAt(occurrence:ReminderOccurrence){return occurrence.snoozedUntil??occurrence.dueAt;}
 export function ruleLabel(frequency:string){
+ if(/^1_TIMES?_A_MONTH$/.test(frequency))return '1 random day a month';
+ if(/^1_TIMES?_A_WEEK$/.test(frequency))return '1 random day a week';
  if(/^2_TIMES?_A_YEAR$/.test(frequency))return 'Dos veces al año · fechas de origen';
  if(frequency==='EVERY_6_MONTHS')return 'Cada seis meses · intervalo';
  if(/^(YEARLY|EVERY_YEAR|1_TIMES?_A_YEAR)$/.test(frequency))return 'Anual';
@@ -15,6 +18,13 @@ export function ruleLabel(frequency:string){
  if(/^EVERY_(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)$/.test(frequency)||/^\d+_TIMES?_A_WEEK$/.test(frequency))return 'Semanal';
  if(frequency==='LAST_DAY_OF_EVERY_MONTH')return 'Último día del mes';
  return 'Regla de origen conservada';
+}
+export function recurrenceLabel(series:ReminderSeries){const rule=series.local.recurrence;return rule?.kind==='random-days'?'1 random day a '+rule.period:ruleLabel(series.sourceRecord.Frequency??'');}
+export function recurrenceExplanation(series:ReminderSeries){
+ const rule=series.local.recurrence;
+ if(rule?.kind==='random-days')return 'Intención aleatoria confirmada. DotBoard aún no selecciona días nuevos; la base de recálculo sigue pendiente de decidir. Se conservan las fechas originales de RemindMe.'+(rule.confirmedFromFrequency!==series.sourceRecord.Frequency?' La frecuencia de origen cambió después de esta confirmación; revisa la regla.':'');
+ if(/^1_TIMES?_A_(MONTH|WEEK)$/.test(series.sourceRecord.Frequency??''))return 'La frecuencia de origen usa días aleatorios en RemindMe. DotBoard conserva sus fechas importadas y todavía no genera nuevas selecciones.';
+ return 'Se conservan las fechas calculadas por RemindMe; sin cálculo local.';
 }
 export function rows(series:ReminderSeries[]){return series.flatMap(s=>s.occurrences.map(occurrence=>({series:s,occurrence})));}
 export function matches(row:ReminderRow,filter:AgendaFilter,now:number){
@@ -38,7 +48,7 @@ export function matches(row:ReminderRow,filter:AgendaFilter,now:number){
 }
 export function agenda(series:ReminderSeries[],filter:AgendaFilter,query:string,now:number){
  const term=query.trim().toLocaleLowerCase();
- return rows(series).filter(row=>matches(row,filter,now)&&(!term||[row.series.sourceRecord.Message,row.series.sourceRecord.UserRequest,row.series.sourceRecord.Frequency,row.series.local.title,row.series.local.notes].join(' ').toLocaleLowerCase().includes(term))).sort((a,b)=>(dueAt(a.occurrence)??Infinity)-(dueAt(b.occurrence)??Infinity)||a.series.id.localeCompare(b.series.id));
+ return rows(series).filter(row=>matches(row,filter,now)&&(!term||[row.series.sourceRecord.Message,row.series.sourceRecord.UserRequest,row.series.sourceRecord.Frequency,recurrenceLabel(row.series),row.series.local.title,row.series.local.notes].join(' ').toLocaleLowerCase().includes(term))).sort((a,b)=>(dueAt(a.occurrence)??Infinity)-(dueAt(b.occurrence)??Infinity)||a.series.id.localeCompare(b.series.id));
 }
 export function moveMonth(month:string,delta:number){const [y,m]=month.split('-').map(Number);return new Date(Date.UTC(y,m-1+delta,1)).toISOString().slice(0,7);}
 export function calendarDays(month:string){
