@@ -5,7 +5,7 @@ import {apiFetch} from "@/lib/api-client";
 
 
 import { useState, useEffect, useRef, useCallback, type FormEvent, type DragEvent } from "react";
-import { LayoutGrid, Plus, Columns3, Check, LockKeyhole, Sparkles, Pencil, X, GripVertical, Loader2, Trash2, AlertCircle, Repeat2, PanelLeftClose, PanelLeftOpen, Moon, Sun, Archive, FileText } from "lucide-react";
+import { LayoutGrid, Plus, Columns3, Check, LockKeyhole, Sparkles, Pencil, X, GripVertical, Loader2, Trash2, AlertCircle, Repeat2, PanelLeftClose, PanelLeftOpen, Moon, Sun, Archive, FileText, Pause, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { BOARD_COLORS, LABELS, expandsDescriptionOnOpen, type Workspace, type Card, type Board } from "@/lib/board-types";
 import type { Action } from "@/lib/workspace-store";
@@ -63,7 +63,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
   const columnDrag=useRef<{boardId:string;columnId:string}|null>(null);
   const [draggingColumn,setDraggingColumn]=useState("");
   const [columnTarget,setColumnTarget]=useState<{id:string;side:"before"|"after"}|null>(null);
-  const board=workspace.boards.find(b=>b.id===selected)??workspace.boards[0];
+  const board=workspace.boards.find(b=>b.id===selected)??workspace.boards.find(b=>!b.paused)??workspace.boards[0];
   const total=board?.columns.reduce((sum,c)=>sum+c.cards.length,0)??0;
   const selectedTarget=workspace.boards.find(b=>b.id===draft.boardId);
   const editingBoard=editor?.kind==="board"?workspace.boards.find(b=>b.id===editor.boardId):undefined;
@@ -96,7 +96,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
     try{localStorage.setItem("dot-board.sidebarCollapsed",String(collapsed));}catch{}
   }
   useEffect(()=>{
-    const active=workspace.boards.flatMap(b=>b.columns.flatMap(c=>(c.triggers??[]).filter(t=>t.enabled)));
+    const active=workspace.boards.filter(b=>!b.paused).flatMap(b=>b.columns.flatMap(c=>(c.triggers??[]).filter(t=>t.enabled)));
     if(!active.length)return;
     const refresh=()=>{if(document.visibilityState==="visible")void load(true);};
     const interval=setInterval(refresh,60000);
@@ -156,6 +156,10 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
   function openCard(columnId?:string,card?:Card){if(!board)return;editorReturnFocus.current=document.activeElement as HTMLElement|null;setEditorSession(value=>value+1);setDescriptionExpanded(!!card&&expandsDescriptionOnOpen(stateRef.current.boards.find(b=>b.id===board.id)));archiveExpected.current=card?{boardId:board.id,columnId:columnId??board.columns[0].id,title:card.title,description:card.description,label:card.label}:undefined;setDraft({...blankDraft,boardId:board.id,columnId:columnId??board.columns[0].id,title:card?.title??"",description:card?.description??"",label:card?.label??""});setFormError("");setEditor({kind:"card",cardId:card?.id});}
   function patchDraft(p:Partial<Draft>){setDraft(d=>({...d,...p}));}
   async function setDescriptionPreference(boardId:string,expanded:boolean,expected:boolean){if(busy||lock.current)return;try{await mutate({action:"set-board-description-preference",boardId,expanded,expected});}catch{}}
+  async function setBoardPaused(target:Board){
+    if(readOnly||busy||lock.current)return;
+    try{await mutate({action:"set-board-paused",boardId:target.id,paused:!target.paused,expected:target.paused===true});}catch{}
+  }
   async function submit(e:FormEvent){
     e.preventDefault();if(!editor||busy||lock.current||draft.description.length>5000)return;
     let operation:Action;
@@ -258,10 +262,14 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
       <div className="workspace-name"><span className="workspace-avatar">d</span><div>dot’s projects<small>Synced privately</small></div></div>
       <div className="side-section"><span>My boards</span><button className="icon-button" onClick={()=>openBoard()} disabled={readOnly||loading||busy} aria-label="Create board"><Plus size={18}/></button></div>
       <nav className="sidebar-scroll" aria-label="Boards">
-        {workspace.boards.map(b=><button key={b.id} className={"board-nav"+(board?.id===b.id?" active":"")+(dropTarget===b.id?" drag-target":"")} onClick={()=>setSelected(b.id)} aria-current={board?.id===b.id?"page":undefined}
-          onDragOver={e=>{if(canDrag(e)){e.preventDefault();e.dataTransfer.dropEffect="move";setDropTarget(b.id);setCardTarget(null);}}} onDragLeave={()=>setDropTarget("")} onDrop={e=>void drop(e,b.id,b.columns[0].id)} title={"Open "+b.name+" · Drop a card here to move it"}>
-          <span className="board-color" style={{background:b.color}}/><span>{b.name}</span><span className="nav-count">{b.columns.reduce((s,c)=>s+c.cards.length,0)}</span>
-        </button>)}
+        {[false,true].map(paused=><section key={String(paused)} className="board-nav-group" aria-label={paused?"Tableros pausados":"Tableros activos"}>
+          <h2 className="board-group-label">{paused?<Pause size={13}/>:<Play size={13}/>} {paused?"Pausados":"Activos"} <span>{workspace.boards.filter(b=>(b.paused===true)===paused).length}</span></h2>
+          {workspace.boards.filter(b=>(b.paused===true)===paused).map(b=><button key={b.id} className={"board-nav"+(board?.id===b.id?" active":"")+(dropTarget===b.id?" drag-target":"")} onClick={()=>setSelected(b.id)} aria-current={board?.id===b.id?"page":undefined}
+            onDragOver={e=>{if(canDrag(e)){e.preventDefault();e.dataTransfer.dropEffect="move";setDropTarget(b.id);setCardTarget(null);}}} onDragLeave={()=>setDropTarget("")} onDrop={e=>{if(b.columns[0])void drop(e,b.id,b.columns[0].id);}} title={"Abrir "+b.name+(paused?" · Pausado":"")}>
+            <span className="board-color" style={{background:b.color}}/><span>{b.name}</span><span className="nav-count">{b.columns.reduce((sum,c)=>sum+c.cards.length,0)}</span>
+          </button>)}
+          {!workspace.boards.some(b=>(b.paused===true)===paused)&&<p className="board-group-empty">{paused?"Ningún tablero pausado":"No hay tableros activos"}</p>}
+        </section>)}
         <button className="new-board-nav" onClick={()=>openBoard()} disabled={readOnly||loading||busy}><Plus size={17}/>Create board</button>
       </nav>
       <div className="sidebar-bottom"><LockKeyhole size={15}/><span>Private · Only you</span></div>
@@ -272,8 +280,9 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
       </header>
       {(loading||busy)&&<div className="loading-bar"/>}
       <div className="board-heading"><div className="board-summary"><div className="board-title-row"><span className="board-color" style={{background:board?.color??BOARD_COLORS[0]}}/><h1>{board?.name??"My boards"}</h1>{board&&<span className="board-card-count">{total} {total===1?"card":"cards"}</span>}</div>{board?.description&&<p title={board.description}>{board.description}</p>}</div>
-        {board&&<div className="board-actions"><button type="button" className="icon-button board-action instructions-toggle" onClick={()=>{instructionsReturnFocus.current=document.activeElement as HTMLElement|null;setInstructionsBoardSnapshot(board);setInstructionsBoardId(board.id);}} disabled={busy||loading} aria-label={"Instrucciones de "+board.name} title="Instrucciones del proyecto"><FileText size={16}/></button><button className="icon-button board-action" onClick={()=>openBoard(board.id)} disabled={busy} aria-label="Edit board" title="Edit board"><Pencil size={16}/></button><button className="button primary" onClick={()=>openCard()} disabled={busy}><Plus size={18}/> New card</button></div>}
+        {board&&<div className="board-actions"><button type="button" className="button board-pause-action" disabled={readOnly||busy||loading||recoveryAvailable} onClick={()=>void setBoardPaused(board)} aria-label={(board.paused?"Reanudar ":"Pausar ")+board.name}>{board.paused?<Play size={16}/>:<Pause size={16}/>} {board.paused?"Reanudar tablero":"Pausar tablero"}</button><button type="button" className="icon-button board-action instructions-toggle" onClick={()=>{instructionsReturnFocus.current=document.activeElement as HTMLElement|null;setInstructionsBoardSnapshot(board);setInstructionsBoardId(board.id);}} disabled={busy||loading} aria-label={"Instrucciones de "+board.name} title="Instrucciones del proyecto"><FileText size={16}/></button><button className="icon-button board-action" onClick={()=>openBoard(board.id)} disabled={busy} aria-label="Edit board" title="Edit board"><Pencil size={16}/></button><button className="button primary" onClick={()=>openCard()} disabled={busy}><Plus size={18}/> New card</button></div>}
       </div>
+      {board?.paused&&<div className="board-pause-notice" role="status"><Pause size={18}/><div><strong>Este tablero está pausado</strong><p>Sus tarjetas e historial se conservan y puedes seguir consultándolos y editándolos. Los disparadores del tablero no crean tarjetas mientras esté pausado.</p><small>Las tareas externas ya iniciadas no se cancelan automáticamente.</small></div></div>}
       {recoveryAvailable&&<div className="error-banner" role="status"><span>Resultado pendiente. La recuperación reenvía exactamente la revisión, operación e ID originales, aunque el tablero haya cambiado.</span><button disabled={busy} onClick={()=>void recoverMutation()}>Recuperar resultado</button></div>}
       {error&&<div className="error-banner" role="alert"><AlertCircle size={18}/><span>{error}</span><button onClick={()=>void load()} disabled={busy}>Reload</button></div>}
       {board?<>
