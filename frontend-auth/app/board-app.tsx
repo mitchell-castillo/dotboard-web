@@ -12,6 +12,7 @@ import type { Action } from "@/lib/workspace-store";
 import ColumnTriggers from "./column-triggers";
 import CardArchive from "./card-archive";
 import BoardTrash from "./board-trash";
+import Reminders from "./reminders";
 import BackupDownload from "./backup-download";
 import CurrentImport from "./current-import";
 import CardComments from "./card-comments";
@@ -64,7 +65,8 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
   const columnDrag=useRef<{boardId:string;columnId:string}|null>(null);
   const [draggingColumn,setDraggingColumn]=useState("");
   const [columnTarget,setColumnTarget]=useState<{id:string;side:"before"|"after"}|null>(null);
-  const board=workspace.boards.find(b=>b.id===selected)??workspace.boards.find(b=>!b.paused)??workspace.boards[0];
+  const remindersSelected=selected==='__reminders';
+  const board=remindersSelected?undefined:workspace.boards.find(b=>b.id===selected)??workspace.boards.find(b=>!b.paused)??workspace.boards[0];
   const total=board?.columns.reduce((sum,c)=>sum+c.cards.length,0)??0;
   const selectedTarget=workspace.boards.find(b=>b.id===draft.boardId);
   const editingBoard=editor?.kind==="board"?workspace.boards.find(b=>b.id===editor.boardId):undefined;
@@ -263,6 +265,7 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
       <div className="workspace-name"><span className="workspace-avatar">d</span><div>dot’s projects<small>Synced privately</small></div></div>
       <div className="side-section"><span>My boards</span><button className="icon-button" onClick={()=>openBoard()} disabled={readOnly||loading||busy} aria-label="Create board"><Plus size={18}/></button></div>
       <nav className="sidebar-scroll" aria-label="Boards">
+        <button className={'board-nav reminders-nav'+(remindersSelected?' active':'')} onClick={()=>setSelected('__reminders')} aria-current={remindersSelected?'page':undefined}><Repeat2 size={18}/><span>Recordatorios</span><span className="nav-count">{workspace.reminders?.series.length??0}</span></button>
         {[false,true].map(paused=><section key={String(paused)} className="board-nav-group" aria-label={paused?"Tableros pausados":"Tableros activos"}>
           <h2 className="board-group-label">{paused?<Pause size={13}/>:<Play size={13}/>} {paused?"Pausados":"Activos"} <span>{workspace.boards.filter(b=>(b.paused===true)===paused).length}</span></h2>
           {workspace.boards.filter(b=>(b.paused===true)===paused).map(b=><button key={b.id} className={"board-nav"+(board?.id===b.id?" active":"")+(dropTarget===b.id?" drag-target":"")} onClick={()=>setSelected(b.id)} aria-current={board?.id===b.id?"page":undefined}
@@ -281,13 +284,13 @@ export default function BoardApp({readOnly=false}:{readOnly?:boolean}={}){
         <div className="topbar-actions"><BackupDownload compact disabled={loading||busy}/><span className="save-status" role="status">{loading||busy?<><Loader2 size={15} className="animate-spin"/><span className="save-status-label">{loading?"Loading…":"Saving…"}</span></>:error?<><AlertCircle size={15}/><span className="save-status-label">Check the notice</span></>:<><Check size={15}/><span className="save-status-label">{readOnly?"Solo lectura":"Saved"}</span></>}</span><CardArchive workspace={workspace} busy={busy} loading={loading} mutate={mutate} onRestore={setSelected}/><button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={darkMode?"Switch to light mode":"Switch to dark mode"} title={darkMode?"Switch to light mode":"Switch to dark mode"}>{darkMode?<Sun size={17}/>:<Moon size={17}/>}</button></div>
       </header>
       {(loading||busy)&&<div className="loading-bar"/>}
-      <div className="board-heading"><div className="board-summary"><div className="board-title-row"><span className="board-color" style={{background:board?.color??BOARD_COLORS[0]}}/><h1>{board?.name??"My boards"}</h1>{board&&<span className="board-card-count">{total} {total===1?"card":"cards"}</span>}</div>{board?.description&&<p title={board.description}>{board.description}</p>}</div>
+      {!remindersSelected&&<div className="board-heading"><div className="board-summary"><div className="board-title-row"><span className="board-color" style={{background:board?.color??BOARD_COLORS[0]}}/><h1>{board?.name??"My boards"}</h1>{board&&<span className="board-card-count">{total} {total===1?"card":"cards"}</span>}</div>{board?.description&&<p title={board.description}>{board.description}</p>}</div>
         {board&&<div className="board-actions"><button type="button" className="button board-pause-action" disabled={readOnly||busy||loading||recoveryAvailable} onClick={()=>void setBoardPaused(board)} aria-label={(board.paused?"Reanudar ":"Pausar ")+board.name}>{board.paused?<Play size={16}/>:<Pause size={16}/>} {board.paused?"Reanudar tablero":"Pausar tablero"}</button><button type="button" className="icon-button board-action instructions-toggle" onClick={()=>{instructionsReturnFocus.current=document.activeElement as HTMLElement|null;setInstructionsBoardSnapshot(board);setInstructionsBoardId(board.id);}} disabled={busy||loading} aria-label={"Instrucciones de "+board.name} title="Instrucciones del proyecto"><FileText size={16}/></button><button className="icon-button board-action" onClick={()=>openBoard(board.id)} disabled={busy} aria-label="Edit board" title="Edit board"><Pencil size={16}/></button><button className="button primary" onClick={()=>openCard()} disabled={busy}><Plus size={18}/> New card</button></div>}
-      </div>
+      </div>}
       {board?.paused&&<div className="board-pause-notice" role="status"><Pause size={18}/><div><strong>Este tablero está pausado</strong><p>Sus tarjetas e historial se conservan y puedes seguir consultándolos y editándolos. Los disparadores del tablero no crean tarjetas mientras esté pausado.</p><small>Las tareas externas ya iniciadas no se cancelan automáticamente.</small></div></div>}
       {recoveryAvailable&&<div className="error-banner" role="status"><span>Resultado pendiente. La recuperación reenvía exactamente la revisión, operación e ID originales, aunque el tablero haya cambiado.</span><button disabled={busy} onClick={()=>void recoverMutation()}>Recuperar resultado</button></div>}
       {error&&<div className="error-banner" role="alert"><AlertCircle size={18}/><span>{error}</span><button onClick={()=>void load()} disabled={busy}>Reload</button></div>}
-      {board?<>
+      {remindersSelected?<Reminders module={workspace.reminders} busy={busy||loading||recoveryAvailable} readOnly={readOnly} mutate={mutate}/>:board?<>
         <div className="kanban">
           {board.columns.map(c=><section key={c.id} className={"column"+(dropTarget===c.id?" drag-target":"")+(draggingColumn===c.id?" column-dragging":"")+(columnTarget?.id===c.id?" column-drop-"+columnTarget.side:"")} aria-label={c.name}
             onDragEnter={e=>previewDrop(e,c.id)} onDragOver={e=>previewDrop(e,c.id)}
