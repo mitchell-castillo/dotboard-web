@@ -1,4 +1,4 @@
-name: Validate and manually publish full DotBoard UI
+name: Validate and publish full DotBoard UI
 on:
   workflow_dispatch:
   pull_request:
@@ -36,7 +36,7 @@ jobs:
         run: npx vite build --config vite.full.config.ts
       - run: node scripts/FullSwaArtifact.mjs full-prepare
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         with:
           name: swa-full-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: frontend-auth/dist-full
@@ -44,7 +44,7 @@ jobs:
           retention-days: 1
   publish:
     needs: validate
-    if: github.repository == 'mitchell-castillo/dotboard-web' && github.repository_id == '1435130248' && github.ref_type == 'branch' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: github.repository == 'mitchell-castillo/dotboard-web' && github.repository_id == '1435130248' && github.ref_type == 'branch' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

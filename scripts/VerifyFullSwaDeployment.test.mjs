@@ -12,4 +12,16 @@ for(const header of Object.keys(hosting.globalHeaders))test(`missing ${header} r
 test('root COOP rejects',async()=>{await assert.rejects(verifyFullDeployment(config.redirectUri,entries,mock((v,n)=>{if(n==='index.html')v.headers['Cross-Origin-Opener-Policy']='same-origin';})));});
 test('missing app blocks before any request',async()=>{const e={...entries};delete e['app.html'];let calls=0;await assert.rejects(verifyFullDeployment(config.redirectUri,e,async()=>{calls++;}));assert.equal(calls,0);});
 test('unexpected API file blocks before request',async()=>{await assert.rejects(verifyFullDeployment(config.redirectUri,{...entries,'api/workspace':'x'},mock()));});
-test('workflow manual publish and concurrency stay guarded',()=>{const y=fs.readFileSync(new URL('../.github/workflows/frontend-full-swa.yml',import.meta.url),'utf8');assert.match(y,/group: dotboard-swa-production/);assert.match(y,/cancel-in-progress: false/);assert.match(y,/github.event_name == 'workflow_dispatch'/);assert.match(y,/github.ref == 'refs\/heads\/main'/);assert.match(y,/node scripts\/FullSwaArtifact.mjs full-check/);assert.match(y,/app_location: frontend-auth\/dist-full/);assert.match(y,/skip_api_build: true/);assert.match(y,/api_location: ''/);assert.doesNotMatch(y,/DOTBOARD_.*AUTODEPLOY.*true/);for(const x of y.matchAll(/uses: [^@\s]+@([^\s]+)/g))assert.match(x[1],/^[a-f0-9]{40}$/);});
+test('workflow automatic main publish and concurrency stay guarded',()=>{const y=fs.readFileSync(new URL('../.github/workflows/frontend-full-swa.yml',import.meta.url),'utf8');assert.match(y,/group: dotboard-swa-production/);assert.match(y,/cancel-in-progress: false/);assert.match(y,/github.event_name == 'workflow_dispatch'/);assert.match(y,/github.ref == 'refs\/heads\/main'/);assert.match(y,/node scripts\/FullSwaArtifact.mjs full-check/);assert.match(y,/app_location: frontend-auth\/dist-full/);assert.match(y,/skip_api_build: true/);assert.match(y,/api_location: ''/);assert.doesNotMatch(y,/DOTBOARD_.*AUTODEPLOY.*true/);for(const x of y.matchAll(/uses: [^@\s]+@([^\s]+)/g))assert.match(x[1],/^[a-f0-9]{40}$/);});
+
+test('only main push or explicit main dispatch can upload and publish',()=>{
+ const y=fs.readFileSync(new URL('../.github/workflows/frontend-full-swa.yml',import.meta.url),'utf8');
+ const upload=y.split('name: swa-full-')[0].split('if: ').at(-1).trim().replace(/\s+with:$/,'');
+ const publish=y.split('  publish:')[1].split('    if: ')[1].split('\n')[0];
+ const events="(github.event_name == 'push' || github.event_name == 'workflow_dispatch')";
+ assert.equal(upload,events+" && github.ref == 'refs/heads/main'");
+ assert.equal(publish,"github.repository == 'mitchell-castillo/dotboard-web' && github.repository_id == '1435130248' && github.ref_type == 'branch' && github.ref == 'refs/heads/main' && "+events);
+ assert.match(y,/needs: validate/);assert.match(y,/permissions:\n  contents: read/);
+ assert.match(y,/persist-credentials: false/);assert.match(y,/Recheck current main immediately before publication/);
+ assert.match(y,/name: dotboard-swa-production/);assert.match(y,/node scripts\/VerifyFullSwaDeployment.mjs/);
+});
