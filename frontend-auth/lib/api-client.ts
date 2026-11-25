@@ -1,4 +1,4 @@
-import type {DotBoardTransport} from '../transport.mjs';
+type DotBoardTransport= {request(path:string,options:{method:string;body?:unknown;signal:AbortSignal}):Promise<Response>};
 let current:DotBoardTransport|null=null;let generation=0;const active=new Set<AbortController>();
 export function bindTransport(transport:DotBoardTransport|null){generation++;for(const c of active)c.abort();active.clear();current=transport;}
 export async function apiFetch(path:string,init:RequestInit={}) {
