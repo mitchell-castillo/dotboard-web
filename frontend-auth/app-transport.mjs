@@ -2,6 +2,10 @@ import {currentOnlyRejection} from './current-only-policy.mjs';
 import {DotBoardTransport} from './transport.mjs';
 import {verifyAccessToken} from './identity-verification.mjs';
 import {verifyHumanSession} from './identity-session.mjs';
+// Safe diagnostic: retain only a numeric HTTP status, never a response body, credentials or headers.
+export class OwnerSetupResponseError extends Error {
+ constructor(status){super('Initial setup unavailable');this.status=status;}
+}
 export class PopupSessionTransport extends DotBoardTransport {
  constructor(config,msal,fetchImpl=fetch,verify=verifyAccessToken,session=verifyHumanSession){super(config,msal,fetchImpl);this.verify=verify;this.session=session;this.generation=0;this.authorized=null;this.controller=null;}
  async initialize(){await this.msal.initialize();return null;}
@@ -40,7 +44,7 @@ export class PopupSessionTransport extends DotBoardTransport {
   if(generation!==this.generation||response.redirected)throw Error('Session changed');
   if(response.status===201)return 'created';
   if(response.status===409)return 'exists';
-  throw Error('Initial setup unavailable');
+  throw new OwnerSetupResponseError(response.status);
  }
  async request(path,options={}){
   const denied=currentOnlyRejection(path,options);if(denied)return denied;
