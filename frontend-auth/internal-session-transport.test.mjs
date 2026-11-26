@@ -19,3 +19,18 @@ test('failed login never grants access, reload loses session',async()=>{
 test('401 invalidates and in-flight response cannot survive logout',async()=>{
  let release;const t=new InternalSessionTransport(async(url)=>url.endsWith('/auth/login')?response({authenticated:true,actorKind:'user',sessionToken:token,csrfToken:csrf}):url.endsWith('/auth/logout')?new Response(null,{status:204}):new Promise(resolve=>release=resolve));await t.login('fixture','password');const pending=t.request('/workspace');await t.logout();release(response({workspace:{}}));await assert.rejects(pending);
 });
+
+test('supported auxiliary routes preserve current-only policy and session protections',async()=>{
+ const calls=[];const t=new InternalSessionTransport(async(url,init)=>{calls.push({url,init});return url.endsWith('/auth/login')?response({authenticated:true,actorKind:'user',sessionToken:token,csrfToken:csrf}):response({});});
+ await t.login('fixture','fixture password');
+ await t.request('/workspace/backup');
+ await t.request('/workspace/instructions?boardId=fixture&format=md');
+ await t.request('/workspace/current-import',{method:'POST',body:{fixture:true}});
+ assert.ok(calls[1].url.endsWith('/api/local/workspace/backup'));
+ assert.ok(calls[2].url.endsWith('/api/local/workspace/instructions?boardId=fixture&format=md'));
+ assert.ok(calls[3].url.endsWith('/api/local/workspace/current-import'));
+ assert.equal(calls[1].init.headers['X-CSRF-Token'],undefined);
+ assert.equal(calls[3].init.headers['X-CSRF-Token'],csrf);
+ for(const path of ['/workspace/instructions/history?boardId=fixture','/workspace/instructions?boardId=fixture&boardId=other','/workspace/instructions?boardId=fixture&extra=value','/workspace/restore'])await assert.rejects(t.request(path));
+ assert.equal(calls.length,4);
+});
