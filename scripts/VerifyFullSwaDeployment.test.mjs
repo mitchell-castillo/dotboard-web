@@ -26,4 +26,4 @@ test('only main push or explicit main dispatch can upload and publish',()=>{
  assert.match(y,/name: dotboard-swa-production/);assert.match(y,/node scripts\/VerifyFullSwaDeployment.mjs/);
 });
 
-test('only exact public owner setup config is accepted by the full artifact',async()=>{for(const input of [{...fullConfig,ownerInitialSetup:false},{...fullConfig,provider:'internal'},{...fullConfig,unexpected:true},{...fullConfig,ownerInitialSetup:'true'}]){let calls=0;await assert.rejects(verifyFullDeployment(config.redirectUri,{...entries,'dotboard-config.json':JSON.stringify(input)},async()=>{calls++;}));assert.equal(calls,0);}});
+test('only exact public internal app config is accepted by the full artifact',async()=>{for(const input of [{...fullConfig,ownerInitialSetup:true},{...fullConfig,provider:'internal'},{...fullConfig,appProvider:'entra'},{...fullConfig,appProvider:'other'},{...fullConfig,unexpected:true},{...fullConfig,ownerInitialSetup:'true'}]){let calls=0;await assert.rejects(verifyFullDeployment(config.redirectUri,{...entries,'dotboard-config.json':JSON.stringify(input)},async()=>{calls++;}));assert.equal(calls,0);}});
