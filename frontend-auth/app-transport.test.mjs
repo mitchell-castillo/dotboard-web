@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {PopupSessionTransport} from './app-transport.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import {PopupSessionTransport,OwnerSetupResponseError} from './app-transport.mjs';
 function setup(){let active=null;const calls=[];const account={homeAccountId:'human'};const msal={initialize:async()=>{},getActiveAccount:()=>active,setActiveAccount:a=>active=a,clearCache:async()=>{},acquireTokenPopup:async()=>({account,accessToken:'test'}),acquireTokenSilent:async()=>({account,accessToken:'test'}),logoutPopup:async()=>{}};
 const t=new PopupSessionTransport({apiScope:'scope',apiBaseUrl:'https://example.test/api',redirectUri:'https://example.test/'},msal,async(u,o)=>{calls.push([u,o]);return new Response('{}');},async()=>({verified:true}),async()=>({authenticated:true}));return {t,msal,calls,account};}
 test('no workspace request before verified session',async()=>{const {t,calls}=setup();await t.initialize();await assert.rejects(t.request('/workspace'));assert.equal(calls.length,0);});
@@ -37,4 +37,5 @@ test('initial account setup needs explicit flag, verified owner and exact canoni
  assert.equal(calls[0].url,good+'/auth/owner/initial-setup');assert.equal(calls[0].init.credentials,'omit');assert.equal(calls[0].init.redirect,'error');
  assert.deepEqual(JSON.parse(calls[0].init.body),{username:user,password});assert.equal(calls[0].init.headers.Authorization,'Bearer test');
  status=409;assert.equal(await t.provisionOwner(user,password),'exists');assert.equal(calls.length,2);
+ status=503;await assert.rejects(t.provisionOwner(user,password),e=>e instanceof OwnerSetupResponseError&&e.status===503&&e.message==='Initial setup unavailable');
 });
