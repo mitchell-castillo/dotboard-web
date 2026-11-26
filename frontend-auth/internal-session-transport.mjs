@@ -33,11 +33,22 @@ export class InternalSessionTransport {
     finally{this.invalidate();this.#busy=false;}
   }
   async request(path,{method='GET',body,signal}={}){
-    if(path!=='/workspace'||!['GET','POST'].includes(method)||(method==='GET'&&body!==undefined))throw Error('Ruta aún no disponible con el acceso interno.');
+    const workspace=path==='/workspace'&&['GET','POST'].includes(method);
+    const backup=path==='/workspace/backup'&&method==='GET';
+    const currentImport=path==='/workspace/current-import'&&method==='POST';
+    let instructions=false;
+    if(typeof path==='string'&&path.startsWith('/workspace/instructions?')&&method==='GET'&&!path.includes('#')){
+      const query=new URLSearchParams(path.slice(path.indexOf('?')+1));
+      const id=query.get('boardId');
+      instructions=!!id&&id.length<=100&&query.getAll('boardId').length===1
+        &&[...query.keys()].every(k=>k==='boardId'||k==='format')
+        &&query.getAll('format').length<=1&&(!query.has('format')||query.get('format')==='md');
+    }
+    if(!(workspace||backup||currentImport||instructions)||(method==='GET'&&body!==undefined))throw Error('Ruta aún no disponible con el acceso interno.');
     if(this.#busy||!this.authorized)throw Error('Inicia sesión en DotBoard.');
     const denied=currentOnlyRejection(path,{method,body});if(denied)return denied;
     const epoch=this.#epoch;
-    const r=await this.#wire('/local/workspace',method,body,signal,true);
+    const r=await this.#wire('/local'+path,method,body,signal,true);
     if(epoch!==this.#epoch||this.#busy||r.redirected)throw Error('La sesión cambió.');
     if(r.status===401)this.invalidate();return r;
   }
