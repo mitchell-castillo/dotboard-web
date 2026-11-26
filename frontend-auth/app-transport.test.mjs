@@ -23,3 +23,18 @@ test('popup default fetch remains globally bound through delegated request',asyn
  await t.login();await t.request('/workspace');assert.equal(receiver,globalThis);
  }finally{globalThis.fetch=original;}
 });
+
+test('initial account setup needs explicit flag, verified owner and exact canonical API',async()=>{
+ const {msal}=setup();const calls=[];const good='https://dotboardfunctions-atfgg7bxeeh3eqdp.eastus-01.azurewebsites.net/api';
+ const cfg={apiScope:'scope',apiBaseUrl:good,redirectUri:'https://example.test/',ownerInitialSetup:true};
+ let status=201;const t=new PopupSessionTransport(cfg,msal,async(url,init)=>{calls.push({url,init});return new Response(null,{status});},async()=>({verified:true}),async()=>({authenticated:true}));
+ const user='synthetic-owner',password='long synthetic password';
+ await assert.rejects(t.provisionOwner(user,password));await t.login();
+ t.config={...cfg,ownerInitialSetup:false};await assert.rejects(t.provisionOwner(user,password));
+ t.config={...cfg,apiBaseUrl:'https://example.test/api'};await assert.rejects(t.provisionOwner(user,password));
+ t.config=cfg;await assert.rejects(t.provisionOwner(user,'short'));assert.equal(calls.length,0);
+ assert.equal(await t.provisionOwner(user,password),'created');assert.equal(calls.length,1);
+ assert.equal(calls[0].url,good+'/auth/owner/initial-setup');assert.equal(calls[0].init.credentials,'omit');assert.equal(calls[0].init.redirect,'error');
+ assert.deepEqual(JSON.parse(calls[0].init.body),{username:user,password});assert.equal(calls[0].init.headers.Authorization,'Bearer test');
+ status=409;assert.equal(await t.provisionOwner(user,password),'exists');assert.equal(calls.length,2);
+});
