@@ -8,7 +8,7 @@ export function auditFull(entries){
  for(const n of ['assets/app-html-audit.js','assets/identity-html-audit.js'])if(Object.hasOwn(entries,n))throw Error('Reserved audit filename');
  for(const n of ['app.html','identity.html','index.html','staticwebapp.config.json'])if(!entries[n])throw Error('Missing entry');
  if(JSON.stringify(JSON.parse(entries['staticwebapp.config.json']))!==JSON.stringify(hosting))throw Error('Hosting differs');
- // The full app uses internal login; the isolated identity diagnostic stays on Entra.
+ // Make internal login selectable for a staged UI rollout; keep existing Entra sign-in and diagnostic.
  // Verify the exact non-secret full config before the original six-field audit.
  if(entries['dotboard-config.json']!==JSON.stringify(fullConfig))throw Error('Full UI config differs from reviewed internal-login configuration');
  const core={...entries,'dotboard-config.json':JSON.stringify(config)};delete core['staticwebapp.config.json'];
