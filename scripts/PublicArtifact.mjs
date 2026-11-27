@@ -36,7 +36,7 @@ const secretPatterns=[
  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{12,}\b/,
  /["']?(?:boards|archivedCards)["']?\s*:\s*\[\s*\{/,
 ];
-export function validateArtifactEntries(entries,policy,{requireConfigured=false}={}){
+export function validateArtifactFiles(entries){
   if(!entries['index.html']||!entries['dotboard-config.json'])throw Error('Static application entry/config is missing.');
   for(const [name,content]of Object.entries(entries)){
     if(name.includes('\\')||name.includes('..')||
@@ -44,12 +44,15 @@ export function validateArtifactEntries(entries,policy,{requireConfigured=false}
       throw Error('Unexpected file in the public artifact.');
     if(secretPatterns.some(pattern=>pattern.test(content)))throw Error('Potential secret or private data in public artifact.');
   }
+  if(/\.map(?:["'\s]|$)/.test(entries['index.html']))throw Error('Source maps must not be published.');
+}
+export function validateArtifactEntries(entries,policy,{requireConfigured=false}={}){
+  validateArtifactFiles(entries);
   let input;try{input=JSON.parse(entries['dotboard-config.json']);}catch{throw Error('Invalid public configuration JSON.');}
   const config=canonicalPublicConfig(input);
   if(config.provider==='unconfigured'){
     if(requireConfigured||keys.some(key=>key!=='provider'&&config[key]!==''))throw Error('Unconfigured or partially filled deployment is blocked.');
   }else validatePublicConfig(config,policy);
-  if(/\.map(?:["'\s]|$)/.test(entries['index.html']))throw Error('Source maps must not be published.');
 }
 export function readArtifact(root){
   const resolved=fs.realpathSync(root);

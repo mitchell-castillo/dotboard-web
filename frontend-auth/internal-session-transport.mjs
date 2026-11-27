@@ -1,10 +1,11 @@
 import {currentOnlyRejection} from './current-only-policy.mjs';
 const API_ORIGIN='https://dotboardfunctions-atfgg7bxeeh3eqdp.eastus-01.azurewebsites.net';
+export const LOCAL_API_BASE = API_ORIGIN + '/api';
 const TOKEN=/^[A-Za-z0-9_-]{43}$/;
 // No cookies or token persistence; the user logs in again after a reload.
 export class InternalSessionTransport {
   #fetch; #token=null; #csrf=null; #epoch=0; #busy=false;
-  constructor(fetchImpl=fetch){this.#fetch=fetchImpl;}
+  constructor(fetchImpl=fetch){this.#fetch=fetchImpl.bind(globalThis);}
   get authorized(){return this.#token!==null;}
   invalidate(){this.#epoch++;this.#token=null;this.#csrf=null;}
   async initialize(){this.invalidate();return null;}
@@ -12,7 +13,7 @@ export class InternalSessionTransport {
     const headers={Accept:'application/json'};
     if(body!==undefined)headers['Content-Type']='application/json';
     if(authenticated){headers['X-DotBoard-Session']=this.#token;if(method==='POST')headers['X-CSRF-Token']=this.#csrf;}
-    return this.#fetch(API_ORIGIN+'/api'+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal,credentials:'omit',mode:'cors',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer'});
+    return this.#fetch(LOCAL_API_BASE+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal,credentials:'omit',mode:'cors',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer'});
   }
   async login(username,password,{signal}={}){
     if(this.#busy||this.authorized)throw new Error('Ya hay una sesión o intento en curso.');

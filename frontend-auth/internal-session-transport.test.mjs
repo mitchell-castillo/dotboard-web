@@ -34,3 +34,12 @@ test('supported auxiliary routes preserve current-only policy and session protec
  for(const path of ['/workspace/instructions/history?boardId=fixture','/workspace/instructions?boardId=fixture&boardId=other','/workspace/instructions?boardId=fixture&extra=value','/workspace/restore'])await assert.rejects(t.request(path));
  assert.equal(calls.length,4);
 });
+
+test('login calls the browser fetch with its global receiver', async () => {
+  const client = new InternalSessionTransport(function () {
+    assert.equal(this, globalThis);
+    return Promise.resolve(response({authenticated: true, actorKind: 'user', sessionToken: token, csrfToken: csrf}));
+  });
+  await client.login('fixture', 'fixture password');
+  assert.equal(client.authorized, true);
+});

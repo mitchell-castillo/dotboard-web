@@ -1,24 +1,41 @@
 import fs from 'node:fs';
-import {config,hosting as diagnosticHosting} from './SwaArtifact.mjs';
-import {readArtifact,validateArtifactEntries,configFingerprint} from './PublicArtifact.mjs';
-export const hosting={...diagnosticHosting,globalHeaders:{...diagnosticHosting.globalHeaders,'Content-Security-Policy':diagnosticHosting.globalHeaders['Content-Security-Policy'].replace('/api/session;','/api/;').replace("style-src 'self';","style-src 'self'; style-src-attr 'unsafe-inline';")}};
-export const fullConfig=Object.freeze({...config,appProvider:'internal',ownerInitialSetup:false});
-const policy={target:{frontendUrl:config.redirectUri,backendUrl:config.apiBaseUrl.slice(0,-4),publicConfigSha256:configFingerprint(config)}};
-export function auditFull(entries){
- for(const n of ['assets/app-html-audit.js','assets/identity-html-audit.js'])if(Object.hasOwn(entries,n))throw Error('Reserved audit filename');
- for(const n of ['app.html','identity.html','index.html','staticwebapp.config.json'])if(!entries[n])throw Error('Missing entry');
- if(JSON.stringify(JSON.parse(entries['staticwebapp.config.json']))!==JSON.stringify(hosting))throw Error('Hosting differs');
- // Make internal login selectable for a staged UI rollout; keep existing Entra sign-in and diagnostic.
- // Verify the exact non-secret full config before the original six-field audit.
- if(entries['dotboard-config.json']!==JSON.stringify(fullConfig))throw Error('Full UI config differs from reviewed internal-login configuration');
- const core={...entries,'dotboard-config.json':JSON.stringify(config)};delete core['staticwebapp.config.json'];
- for(const n of ['app','identity']){core['assets/'+n+'-html-audit.js']=core[n+'.html'];delete core[n+'.html'];}
- validateArtifactEntries(core,policy,{requireConfigured:true});
- for(const n of ['app.html','identity.html'])if(entries[n].includes('http')||!entries[n].includes('/assets/'))throw Error('External entry');
+import { hosting as diagnosticHosting } from './SwaArtifact.mjs';
+import { readArtifact, validateArtifactFiles } from './PublicArtifact.mjs';
+import { LOCAL_API_BASE } from '../frontend-auth/internal-session-transport.mjs';
+
+export const fullConfig = Object.freeze({provider: 'internal', apiBaseUrl: LOCAL_API_BASE});
+export const hosting = {
+  globalHeaders: {
+    ...diagnosticHosting.globalHeaders,
+    'Content-Security-Policy': [
+      "default-src 'none'", "script-src 'self'", "style-src 'self'", "style-src-attr 'unsafe-inline'",
+      "connect-src 'self' " + LOCAL_API_BASE + '/', "img-src 'self' data:", "base-uri 'none'",
+      "form-action 'none'", "frame-ancestors 'none'", "object-src 'none'",
+    ].join('; '),
+  },
+  routes: [{route: '/.auth/login/aad', statusCode: 404}, {route: '/api/*', statusCode: 404}],
+};
+
+export function auditFull(entries) {
+  if (entries['dotboard-config.json'] !== JSON.stringify(fullConfig)) throw Error('Unexpected login configuration');
+  if (JSON.stringify(JSON.parse(entries['staticwebapp.config.json'])) !== JSON.stringify(hosting)) throw Error('Hosting differs');
+  const core = {...entries};
+  delete core['staticwebapp.config.json'];
+  for (const page of ['app.html', 'identity.html']) {
+    if (!core[page] || core[page] !== core['index.html']) throw Error('Login entry differs: ' + page);
+    delete core[page];
+  }
+  if (core['index.html'].includes('http') || !core['index.html'].includes('/assets/')) throw Error('External entry');
+  validateArtifactFiles(core);
 }
-if(process.argv[2]==='full-prepare'){
- fs.renameSync('frontend-auth/dist-full/bridge.html','frontend-auth/dist-full/index.html');
- fs.writeFileSync('frontend-auth/dist-full/dotboard-config.json',JSON.stringify(fullConfig));
- fs.writeFileSync('frontend-auth/dist-full/staticwebapp.config.json',JSON.stringify(hosting));
+
+if (process.argv[2] === 'full-prepare') {
+  const dir = 'frontend-auth/dist-full/';
+  for (const alias of ['index.html', 'identity.html']) fs.copyFileSync(dir + 'app.html', dir + alias);
+  fs.writeFileSync(dir + 'dotboard-config.json', JSON.stringify(fullConfig));
+  fs.writeFileSync(dir + 'staticwebapp.config.json', JSON.stringify(hosting));
 }
-if(['full-prepare','full-check'].includes(process.argv[2])){auditFull(readArtifact('frontend-auth/dist-full'));console.log('PASS: isolated full UI static artifact');}
+if (['full-prepare', 'full-check'].includes(process.argv[2])) {
+  auditFull(readArtifact('frontend-auth/dist-full'));
+  console.log('Verified internal sign-in artifact.');
+}

@@ -27,7 +27,7 @@ export async function verifyFullDeployment(deployedUrl,entries,fetcher=fetch){
    const actual=response.headers.get(key);
    if(key==='Cache-Control'?!actual?.split(',').map(s=>s.trim().toLowerCase()).includes('no-store'):actual!==value)throw Error('Published security headers mismatch');
   }
-  if(name==='index.html'&&response.headers.get('Cross-Origin-Opener-Policy'))throw Error('Bridge must not carry COOP');
+
  }
  return true;
 }
@@ -38,5 +38,5 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1]
   catch{if(attempt<5)await new Promise(resolve=>setTimeout(resolve,10000));}
  }
  if(!verified){console.error('Full UI deployment not verified: static bytes, origin or security headers differ. No API or data endpoint was called.');process.exitCode=1;}
- else console.log('Verified full UI app, root bridge, identity page and static assets. Human login and workspace access remain separate checks.');
+ else console.log('Verified internal sign-in pages and static assets.');
 }
