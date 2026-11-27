@@ -27,11 +27,11 @@ jobs:
       - run: npm --prefix frontend-auth audit --omit=dev --audit-level=moderate
       - run: npm --prefix frontend-auth test
       - run: npm --prefix frontend-auth run lint
-      - name: Lint identity, auth and read-only policy modules
+      - name: Lint internal session transport and workspace policy
         working-directory: frontend-auth
-        run: npx eslint identity.mjs identity-verification.mjs identity-session.mjs bridge.mjs read-only-policy.mjs app-transport.mjs entra.mjs transport.mjs
+        run: npx eslint internal-session-transport.mjs current-only-policy.mjs read-only-policy.mjs
       - run: npm --prefix frontend-auth exec -- tsc --noEmit -p frontend-auth/tsconfig.json
-      - name: Build full UI, identity and Microsoft bridge
+      - name: Build DotBoard with internal sign-in
         working-directory: frontend-auth
         run: npx vite build --config vite.full.config.ts
       - run: node scripts/FullSwaArtifact.mjs full-prepare

@@ -1,19 +1,107 @@
-import React,{useEffect,useRef,useState,lazy,Suspense} from 'react';import{createRoot}from'react-dom/client';
-const BoardApp=lazy(()=>import('./app/board-app'));import{createDotBoardTransport}from'./entra.mjs';import{bindTransport}from'./lib/api-client';import{OwnerSetupResponseError}from'./app-transport.mjs';import type{PopupSessionTransport}from'./app-transport.mjs';import{InternalSessionTransport}from'./internal-session-transport.mjs';import'./app/globals.css';
-type PublicConfig={provider:string;appProvider?:string;ownerInitialSetup?:boolean;tenantId?:string;clientId?:string;redirectUri?:string;apiBaseUrl?:string;apiScope?:string};
-function App(){
- const [state,setState]=useState<'loading'|'configuration'|'signed-out'|'ready'|'busy'>('loading');const[error,setError]=useState('');const transport=useRef<PopupSessionTransport|InternalSessionTransport|null>(null);const[internal,setInternal]=useState(false);const[recoveryAvailable,setRecoveryAvailable]=useState(false);const configRef=useRef<PublicConfig|null>(null);const[epoch,setEpoch]=useState(0);const[setupEnabled,setSetupEnabled]=useState(false);const[setupPending,setSetupPending]=useState(false);const[setupMessage,setSetupMessage]=useState('');
- useEffect(()=>{let disposed=false;const controller=new AbortController();const reset=()=>{transport.current?.invalidate();bindTransport(null);setEpoch(value=>value+1);setState('signed-out');setError('Inicia sesión nuevamente para continuar.');};
- const resume=()=>{const client=transport.current;if(!client?.authorized||(!(client instanceof InternalSessionTransport)&&!client.msal.getActiveAccount()))reset();};
- const leave=()=>{if(!transport.current?.authorized)reset();};
- window.addEventListener('pagehide',leave);window.addEventListener('dotboard-auth-required',reset);window.addEventListener('pageshow',resume);window.addEventListener('popstate',resume);
- void(async()=>{try{const response=await fetch('./dotboard-config.json',{cache:'no-store',signal:controller.signal});if(!response.ok)throw Error('La configuración de acceso no está disponible.');const config=await response.json();configRef.current=config;const useInternal=config?.provider==='internal';const client=useInternal?new InternalSessionTransport():createDotBoardTransport(config);transport.current=client;if(!disposed){setInternal(useInternal);setRecoveryAvailable(config?.appProvider==='internal'&&config?.provider==='entra');setSetupEnabled(!useInternal&&config?.ownerInitialSetup===true);}const account=await client.initialize();if(disposed)return;if(account){bindTransport(client);setState('ready');}else setState('signed-out');}catch(e){if(!disposed){setState('configuration');setError(e instanceof Error?e.message:'Acceso sin configurar.');}}})();
- return()=>{disposed=true;controller.abort();bindTransport(null);transport.current?.invalidate();window.removeEventListener('pagehide',leave);window.removeEventListener('dotboard-auth-required',reset);window.removeEventListener('pageshow',resume);window.removeEventListener('popstate',resume);};},[]);
- async function switchProvider(useInternal:boolean){if(state!=='signed-out'||!recoveryAvailable||!configRef.current)return;setState('busy');setError('');bindTransport(null);transport.current?.invalidate();try{const client=useInternal?new InternalSessionTransport():createDotBoardTransport(configRef.current);await client.initialize();transport.current=client;setInternal(useInternal);setSetupEnabled(false);setState('signed-out');}catch{transport.current=null;setError('El acceso seleccionado no está disponible. Actualiza la página para reintentar.');setState('configuration');}}
- async function login(username?:string,password?:string){const client=transport.current;if(!client||state==='busy')return;setState('busy');setError('');try{if(client instanceof InternalSessionTransport)await client.login(username??'',password??'');else await client.login();bindTransport(client);setState('ready');}catch{setError('No se completó el inicio de sesión. Puedes intentarlo de nuevo.');setState('signed-out');}}
- async function provisionOwner(username:string,password:string){const client=transport.current;if(!setupEnabled||setupPending||!client||client instanceof InternalSessionTransport)return;setSetupPending(true);setSetupMessage('');try{const result=await client.provisionOwner(username,password);setSetupEnabled(false);setSetupMessage(result==='created'?'Tu cuenta interna está creada.':'Ya existe una cuenta interna. No se ha modificado.');}catch(e){const status=e instanceof OwnerSetupResponseError&&Number.isInteger(e.status)&&e.status>=400&&e.status<=599?` (código ${e.status})`:'';setSetupMessage(`No se pudo crear la cuenta${status}. Verifica los datos e inténtalo de nuevo.`);}finally{setSetupPending(false);}}
- async function logout(){const client=transport.current;if(!client||state==='busy')return;bindTransport(null);setEpoch(value=>value+1);setState('busy');try{await client.logout();setState('signed-out');}catch{setError('La salida del proveedor no se completó. Los datos locales ya se ocultaron.');setState('signed-out');}}
- if(state==='ready')return<><div className="auth-bar"><span>DotBoard privado</span><button onClick={()=>void logout()}>Cerrar sesión</button></div>{setupEnabled&&<details><summary>Crear acceso interno de DotBoard</summary><p>Elige un usuario en minúsculas, de 3 a 64 caracteres, y una contraseña única de al menos 16 caracteres. No se cambia el acceso actual.</p><form method="post" onSubmit={e=>{e.preventDefault();const form=e.currentTarget;const user=form.querySelector<HTMLInputElement>('input[data-setup-user]')!;const pass=form.querySelector<HTMLInputElement>('input[data-setup-pass]')!;const username=user.value,password=pass.value;if(!/^[a-z][a-z0-9._-]{2,63}$/.test(username)){setSetupMessage('El usuario debe tener de 3 a 64 caracteres, empezar con una letra minúscula y usar solo minúsculas, números, punto, guion o guion bajo.');return;}if(password.length<16||password.length>256){setSetupMessage('La contraseña debe tener entre 16 y 256 caracteres.');return;}pass.value='';void provisionOwner(username,password);}}><label>Usuario <input data-setup-user autoComplete="username" required pattern={String.raw`[a-z][a-z0-9._\-]{2,63}`} title="De 3 a 64 caracteres: empieza con una letra minúscula; solo minúsculas, números, punto, guion y guion bajo." maxLength={64}/></label><label>Contraseña <input data-setup-pass type="password" autoComplete="new-password" required minLength={16} maxLength={256}/></label><button type="submit" disabled={setupPending}>{setupPending?'Creando…':'Crear cuenta'}</button></form></details>}{setupMessage&&<p role="status">{setupMessage}</p>}<Suspense fallback={<p>Cargando tablero privado…</p>}><BoardApp key={epoch}/></Suspense></>;
- return<main className="auth-gate"><h1>DotBoard</h1><p>{state==='loading'?'Comprobando acceso…':state==='configuration'?'Acceso aún sin configurar':state==='busy'?'Esperando autenticación…':'Tus proyectos requieren iniciar sesión.'}</p>{error&&<p role="alert">{error}</p>}{state==='signed-out'&&(internal?<form method="post" onSubmit={e=>{e.preventDefault();const form=e.currentTarget;const user=form.querySelector<HTMLInputElement>('input[data-login-user]')!;const pass=form.querySelector<HTMLInputElement>('input[data-login-password]')!;const username=user.value,password=pass.value;pass.value='';void login(username,password);}}><label>Usuario <input data-login-user autoComplete="username" required maxLength={64}/></label><label>Contraseña <input data-login-password type="password" autoComplete="current-password" required maxLength={256}/></label><button type="submit">Entrar</button></form>:<button onClick={()=>void login()}>Iniciar sesión</button>)}{state==='signed-out'&&recoveryAvailable&&<button type="button" onClick={()=>void switchProvider(!internal)}>{internal?'Usar acceso anterior (Microsoft)':'Probar usuario y contraseña'}</button>}</main>;
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
+import { createRoot } from 'react-dom/client';
+import { InternalSessionTransport, LOCAL_API_BASE } from './internal-session-transport.mjs';
+import { bindTransport } from './lib/api-client';
+import './app/globals.css';
+
+const BoardApp = lazy(() => import('./app/board-app'));
+type Status = 'loading' | 'unconfigured' | 'signed-out' | 'signing-in' | 'ready' | 'signing-out';
+
+function App() {
+  const [status, setStatus] = useState<Status>('loading');
+  const [error, setError] = useState('');
+  const [client] = useState(() => new InternalSessionTransport());
+  const generation = useRef(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const clearSession = () => {
+      generation.current++;
+      client.invalidate();
+      bindTransport(null);
+    };
+    const expired = () => {
+      clearSession();
+      setError('Tu sesión terminó. Vuelve a iniciar sesión.');
+      setStatus('signed-out');
+    };
+    const leave = () => {
+      if (client.authorized) expired();
+    };
+    window.addEventListener('pagehide', leave);
+    window.addEventListener('dotboard-auth-required', expired);
+
+    async function loadConfig() {
+      try {
+        const response = await fetch('./dotboard-config.json', { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw Error();
+        const config = await response.json();
+        if (config.provider !== 'internal' || config.apiBaseUrl !== LOCAL_API_BASE) throw Error();
+        if (!controller.signal.aborted) setStatus('signed-out');
+      } catch {
+        if (!controller.signal.aborted) setStatus('unconfigured');
+      }
+    }
+    void loadConfig();
+    return () => {
+      controller.abort();
+      clearSession();
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('dotboard-auth-required', expired);
+    };
+  }, [client]);
+
+  async function login(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (status !== 'signed-out') return;
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    form.reset();
+    const attempt = ++generation.current;
+    setStatus('signing-in');
+    setError('');
+    try {
+      await client.login(String(fields.get('username')), String(fields.get('password')));
+      if (attempt !== generation.current) return;
+      bindTransport(client);
+      setStatus('ready');
+    } catch {
+      if (attempt !== generation.current) return;
+      setError('No se pudo iniciar sesión. Revisa tu usuario y contraseña e inténtalo de nuevo.');
+      setStatus('signed-out');
+    }
+  }
+
+  async function logout() {
+    bindTransport(null);
+    setError('');
+    setStatus('signing-out');
+    try {
+      await client.logout();
+    } catch {
+      setError('Cerraste la sesión en este navegador. El servidor no confirmó la salida.');
+    } finally {
+      setStatus('signed-out');
+    }
+  }
+
+  if (status === 'ready') return <>
+    <div className="auth-bar"><span>DotBoard privado</span><button onClick={() => void logout()}>Cerrar sesión</button></div>
+    <Suspense fallback={<p>Cargando tablero privado…</p>}><BoardApp /></Suspense>
+  </>;
+
+  return <main className="auth-gate">
+    <h1>DotBoard</h1>
+    {status === 'signed-out' ? <form method="post" onSubmit={login}>
+      <label>Usuario <input name="username" autoComplete="username" required maxLength={64} /></label>
+      <label>Contraseña <input name="password" type="password" autoComplete="current-password" required maxLength={256} /></label>
+      <button type="submit">Entrar</button>
+    </form> : <p role="status">{{
+      loading: 'Comprobando acceso…', unconfigured: 'Acceso sin configurar.',
+      'signing-in': 'Iniciando sesión…', 'signing-out': 'Cerrando sesión…'
+    }[status]}</p>}
+    {error && <p role="alert">{error}</p>}
+  </main>;
 }
-createRoot(document.getElementById('root')!).render(<App/>);
+
+createRoot(document.getElementById('root')!).render(<App />);
